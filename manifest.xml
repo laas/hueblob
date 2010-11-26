@@ -1,7 +1,7 @@
 <package>
   <description brief="hueblob">
 
-     hueblob
+     Stereo tracking of a color blob.
 
   </description>
   <author>Thomas Moulard</author>
@@ -9,6 +9,11 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/hueblob</url>
 
+  <depend package="std_msgs"/>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="image_transport"/>
+  <depend package="geometry_msgs"/>
+
+  <depend package="bullet"/>
 </package>
-
-
