@@ -1,0 +1,14 @@
+<package>
+  <description brief="hueblob">
+
+     hueblob
+
+  </description>
+  <author>Thomas Moulard</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hueblob</url>
+
+</package>
+
+
