@@ -1,1 +1,2 @@
-geometry_msgs/TransformStamped position
+string                          name
+geometry_msgs/TransformStamped  position

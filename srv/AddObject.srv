@@ -1,0 +1,4 @@
+string			name
+sensor_msgs/Image       image
+---
+int8			status
