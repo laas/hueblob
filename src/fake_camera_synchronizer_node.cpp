@@ -1,5 +1,6 @@
 #include <boost/bind.hpp>
 
+#include <ros/console.h>
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <ros/param.h>
@@ -11,24 +12,41 @@
 sensor_msgs::ImageConstPtr left;
 sensor_msgs::ImageConstPtr right;
 
+void publishImagesIfReady(image_transport::Publisher& pub_l,
+			  image_transport::Publisher& pub_r)
+{
+  if (!left || !right)
+    return;
+  sensor_msgs::Image image_left(*left);
+  sensor_msgs::Image image_right(*right);
+
+  // Fix timestamps if necessary.
+
+  // FIXME: manual synchronization should be reported and
+  // a warning should be issued if the difference between
+  // timestamps is too important.
+  if (image_left.header.stamp != image_right.header.stamp)
+    {
+      if (image_left.header.stamp >= image_right.header.stamp)
+	image_right.header.stamp = image_left.header.stamp;
+      else
+	image_left.header.stamp = image_right.header.stamp;
+    }
+
+  pub_l.publish(image_left);
+  pub_r.publish(image_right);
+
+  left.reset();
+  right.reset();
+}
+
 void imageCallback(sensor_msgs::ImageConstPtr& image,
 		   image_transport::Publisher& pub_l,
 		   image_transport::Publisher& pub_r,
 		   const sensor_msgs::ImageConstPtr& msg)
 {
   image = msg;
-
-  if (left && right)
-    {
-      sensor_msgs::Image image_left(*left);
-      sensor_msgs::Image image_right(*right);
-
-      pub_l.publish(image_left);
-      pub_r.publish(image_right);
-
-      left.reset();
-      right.reset();
-    }
+  publishImagesIfReady(pub_l, pub_r);
 }
 
 image_transport::CameraSubscriber::Callback
@@ -44,14 +62,14 @@ bindImageCallback(sensor_msgs::ImageConstPtr& image,
 
 int main(int argc, char **argv)
 {
+  ros::init(argc, argv, "fake_camera_synchronizer");
+
   std::string left_in, left_out, right_in, right_out;
   ros::param::param<std::string>("~left_in", left_in, "");
   ros::param::param<std::string>("~right_in", right_in, "");
   ros::param::param<std::string>("~left_out", left_out, "");
   ros::param::param<std::string>("~right_out", right_out, "");
 
-
-  ros::init(argc, argv, "fake_camera_synchronizer");
 
   ros::NodeHandle n("fake_camera_synchronizer");
   image_transport::ImageTransport it(n);
