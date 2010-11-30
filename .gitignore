@@ -3,3 +3,5 @@ lib/
 msg/lisp/
 msg_gen/
 src/hueblob/
+srv/lisp/
+srv_gen/
