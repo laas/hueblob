@@ -29,3 +29,7 @@ rosbuild_gensrv()
 #target_link_libraries(example ${PROJECT_NAME})
 
 rosbuild_add_library(hueblob_node src/hueblob_node.cpp)
+
+rosbuild_add_executable(
+  fake_camera_synchronizer_node
+  src/fake_camera_synchronizer_node.cpp)
