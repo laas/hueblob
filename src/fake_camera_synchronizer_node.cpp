@@ -7,80 +7,88 @@
 #include <std_msgs/String.h>
 #include <sensor_msgs/Image.h>
 
-#include "hueblob/Blob.h"
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
-sensor_msgs::ImageConstPtr left;
-sensor_msgs::ImageConstPtr right;
+typedef message_filters::sync_policies::ApproximateTime<
+  sensor_msgs::Image, sensor_msgs::CameraInfo,
+  sensor_msgs::Image, sensor_msgs::CameraInfo>
+policy_t;
 
-void publishImagesIfReady(image_transport::Publisher& pub_l,
-			  image_transport::Publisher& pub_r)
-{
-  if (!left || !right)
-    return;
-  sensor_msgs::Image image_left(*left);
-  sensor_msgs::Image image_right(*right);
-
-  // Fix timestamps if necessary.
-
-  // FIXME: manual synchronization should be reported and
-  // a warning should be issued if the difference between
-  // timestamps is too important.
-  if (image_left.header.stamp != image_right.header.stamp)
-    {
-      if (image_left.header.stamp >= image_right.header.stamp)
-	image_right.header.stamp = image_left.header.stamp;
-      else
-	image_left.header.stamp = image_right.header.stamp;
-    }
-
-  pub_l.publish(image_left);
-  pub_r.publish(image_right);
-
-  left.reset();
-  right.reset();
-}
-
-void imageCallback(sensor_msgs::ImageConstPtr& image,
-		   image_transport::Publisher& pub_l,
+void imageCallback(image_transport::Publisher& pub_l,
+		   ros::Publisher& pub_cam_l,
 		   image_transport::Publisher& pub_r,
-		   const sensor_msgs::ImageConstPtr& msg)
+		   ros::Publisher& pub_cam_r,
+		   const sensor_msgs::ImageConstPtr& left,
+		   const sensor_msgs::CameraInfoConstPtr& left_camera,
+		   const sensor_msgs::ImageConstPtr& right,
+		   const sensor_msgs::CameraInfoConstPtr& right_camera
+		   )
 {
-  image = msg;
-  publishImagesIfReady(pub_l, pub_r);
-}
+  sensor_msgs::Image left_(*left);
+  sensor_msgs::Image right_(*right);
+  sensor_msgs::CameraInfo left_camera_(*left_camera);
+  sensor_msgs::CameraInfo right_camera_(*right_camera);
 
-image_transport::CameraSubscriber::Callback
-bindImageCallback(sensor_msgs::ImageConstPtr& image,
-		  image_transport::Publisher& pub_l,
-		  image_transport::Publisher& pub_r)
-{
-  return boost::bind
-    (imageCallback,
-     boost::ref(image), boost::ref(pub_l), boost::ref(pub_r), _1);
-}
+  // Fix timestamps.
+  // FIXME: a warning should be issued if the differences between
+  // timestamps are too important.
+  left_camera_.header.stamp = left_.header.stamp;
+  right_camera_.header.stamp = left_.header.stamp;
+  right_.header.stamp = left_.header.stamp;
 
+  pub_l.publish(left_);
+  pub_cam_l.publish(left_camera_);
+  pub_r.publish(right_);
+  pub_cam_r.publish(right_camera_);
+}
 
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "fake_camera_synchronizer");
 
-  std::string left_in, left_out, right_in, right_out;
-  ros::param::param<std::string>("~left_in", left_in, "");
-  ros::param::param<std::string>("~right_in", right_in, "");
-  ros::param::param<std::string>("~left_out", left_out, "");
-  ros::param::param<std::string>("~right_out", right_out, "");
+  std::string in, out;
+  ros::param::param<std::string>("~in", in, "");
+  ros::param::param<std::string>("~out", out, "");
 
+  std::string left_in = in + "/left/image_raw";
+  std::string left_cam_in = in + "/left/camera_info";
+  std::string left_out = out + "/left/image_raw";
+  std::string left_cam_out = out + "/left/camera_info";
+
+  std::string right_in = in + "/right/image_raw";
+  std::string right_cam_in = in + "/right/camera_info";
+  std::string right_out = out + "/right/image_raw";
+  std::string right_cam_out = out + "/right/camera_info";
 
   ros::NodeHandle n("fake_camera_synchronizer");
   image_transport::ImageTransport it(n);
 
   image_transport::Publisher pub_l = it.advertise(left_out, 1);
   image_transport::Publisher pub_r = it.advertise(right_out, 1);
+  ros::Publisher pub_cam_l =
+    n.advertise<sensor_msgs::CameraInfo>(left_cam_out, 1);
+  ros::Publisher pub_cam_r =
+    n.advertise<sensor_msgs::CameraInfo>(right_cam_out, 1);
 
-  image_transport::CameraSubscriber sub_l =
-    it.subscribeCamera(left_in, 1, bindImageCallback(left, pub_l, pub_r));
-  image_transport::CameraSubscriber sub_r =
-    it.subscribeCamera(right_in, 1, bindImageCallback(right, pub_l, pub_r));
+  message_filters::Subscriber<sensor_msgs::Image>
+    sub_l(n, left_in, 1);
+  message_filters::Subscriber<sensor_msgs::CameraInfo>
+    sub_l_cam(n, left_cam_in, 1);
+  message_filters::Subscriber<sensor_msgs::Image>
+    sub_r(n, right_in, 1);
+  message_filters::Subscriber<sensor_msgs::CameraInfo>
+    sub_r_cam(n, right_cam_in, 1);
+
+
+  message_filters::Synchronizer<policy_t> sync
+    (policy_t(10), sub_l, sub_l_cam, sub_r, sub_r_cam);
+  sync.registerCallback
+    (boost::bind(imageCallback,
+		 boost::ref(pub_l), boost::ref(pub_cam_l),
+		 boost::ref(pub_r), boost::ref(pub_cam_r),
+		 _1, _2, _3, _4));
 
   ros::Rate loop_rate(10);
 
