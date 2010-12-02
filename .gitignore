@@ -5,3 +5,9 @@ msg_gen/
 src/hueblob/
 srv/lisp/
 srv_gen/
+*~*
+*#*
+*CMakeCache.txt
+*CMakeFiles/*
+cmake_install.cmake
+Makefile

@@ -1,4 +1,7 @@
-string			name
+string                  name
+float32                 anchor_x
+float32                 anchor_y
+float32                 anchor_z
 sensor_msgs/Image       image
 ---
-int8			status
+int8                    status
