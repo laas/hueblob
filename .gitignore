@@ -1,8 +1,10 @@
 bin/
 lib/
+msg/java/
 msg/lisp/
 msg_gen/
 src/hueblob/
+srv/java/
 srv/lisp/
 srv_gen/
 *~*
