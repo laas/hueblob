@@ -1,0 +1,49 @@
+<launch>
+  <node pkg="rosbag"
+	type="rosbag"
+	name="stereo"
+	args="play -l $(find hueblob)/data/2010-11-29-18-07-39.bag"
+	/>
+
+  <node
+     pkg="hueblob"
+     type="fake_camera_synchronizer_node"
+     name="fake_camera_synchronizer_node"
+     respawn="true" >
+    <param name="in" value="/wide" />
+    <param name="out" value="/wide_sync" />
+  </node>
+
+  <node
+     ns="/wide_sync"
+     pkg="stereo_image_proc"
+     type="stereo_image_proc"
+     name="stereo_image_proc"
+     respawn="true" />
+
+  <node
+     pkg="hueblob"
+     type="hueblob_node"
+     name="hueblob_node"
+     respawn="false" >
+    <param name="stereo" value="/wide_sync" />
+  </node>
+
+
+  <!-- optional visualization tools -->
+
+  <group if="$(optenv ENABLE_CONSOLE 0)">
+    <node
+       pkg="rxtools"
+       type="rxconsole"
+       name="rxconsole" />
+  </group>
+
+  <group if="$(optenv ENABLE_DISPLAY 0)">
+    <node
+       pkg="image_view"
+       type="stereo_view"
+       name="stereo_view"
+       args="stereo:=/wide_sync image:=image_mono"/>
+  </group>
+</launch>
