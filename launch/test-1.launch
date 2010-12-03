@@ -26,7 +26,7 @@
      type="hueblob_node"
      name="hueblob_node"
      respawn="false" >
-    <param name="stereo" value="/wide_sync" />
+    <param name="_stereo" value="/wide_sync" />
   </node>
 
 
