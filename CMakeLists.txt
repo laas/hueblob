@@ -31,3 +31,9 @@ rosbuild_add_executable(hueblob_node src/hueblob_node.cpp src/hueblob.cpp)
 rosbuild_add_executable(
   fake_camera_synchronizer_node
   src/fake_camera_synchronizer_node.cpp)
+
+# Download test bag file if required.
+rosbuild_download_test_data(
+  http://www.laas.fr/~tmoulard/2010-11-29-18-07-39.bag
+  data/2010-11-29-18-07-39.bag
+  617eadf43514bdb7e9c36180506f8de0)
