@@ -1,0 +1,11 @@
+# This service implements synchronous blob detection.
+
+# Object to be searched.
+string  name
+
+# Initial hint.
+Box     box
+---
+# Return status.
+#FIXME: is it needed?
+int8    status

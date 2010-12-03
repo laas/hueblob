@@ -1,7 +1,12 @@
+# Add an object to the object database of the node.
+
+# Object name
 string                  name
-float32                 anchor_x
-float32                 anchor_y
-float32                 anchor_z
+# ???
+geometry_msgs/Point     anchor
+# Image
 sensor_msgs/Image       image
 ---
+# Return status
+#FIXME: is it needed?
 int8                    status
