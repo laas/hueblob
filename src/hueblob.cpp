@@ -239,7 +239,8 @@ HueBlob::trackBlob(const std::string& name)
       memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
       for(int nmodel = 0; nmodel < object.nViews; ++nmodel)
 	{
-	  cvCalcBackProject(hstrackImage, trackBackProj, object.modelHistogram[nmodel]);
+	  cvCalcBackProject(hstrackImage, trackBackProj,
+			    object.modelHistogram[nmodel]);
 
 	  unsigned char* s = (unsigned char *)trackBackProj->imageData;
 	  unsigned char* d = (unsigned char *)thrBackProj->imageData;
@@ -258,7 +259,8 @@ HueBlob::trackBlob(const std::string& name)
 
       CvBox2D box;
       CvConnectedComp components;
-      CvTermCriteria criteria = cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
+      CvTermCriteria criteria =
+	cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
       cvCamShift(thrBackProj,
 		 cvRect(blob.x, blob.y, blob.width, blob.height),
 		 criteria, &components, &box);
@@ -275,108 +277,6 @@ HueBlob::trackBlob(const std::string& name)
       blob.height = components.rect.height;
     }
 
-
-#ifdef FROM_GENOM
-  struct HueBlobObj *objmodel;
-  CvTermCriteria criteria = cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
-  CvConnectedComp components;
-  CvBox2D object;
-  unsigned char *s, *d;
-  unsigned int p;
-  int nmodel;
-  double intrinsic[9], baseline;
-  IplImage viam;
-  T3D pose;
-  int i;
-  DATA_IM3D im3d;
-  T3D c2w;
-  /* --- compute 3D position --- */
-
-  {
-    int off, hei;
-
-    off = blob->y - 4; if (off < 0) off = 0;
-    hei = blob->height + 4; if (off+hei > blobtrackImage[1]->height)
-			      hei = blobtrackImage[1]->height - off;
-
-  pose = t3dMatrixIdentity;
-
-  if (init_data_im3d(&im3d,
-		     hei, blobtrackImage[1]->width, 0,0,0) != ERR_IM3D_OK) {
-    return EXEC;
-  }
-
-  {
-    unsigned char *images[2];
-
-    intrinsic[5] -= off;
-
-    images[0] = (unsigned char*)blobtrackImage[1]->imageData + off*blobtrackImage[1]->widthStep;
-    images[1] = (unsigned char*)blobtrackImage[2]->imageData + off*blobtrackImage[2]->widthStep;
-
-    if (hb_correlation_compute(images, blobtrackImage[1]->width, hei,
-			       baseline, intrinsic, &im3d, report) != OK) {
-      posterTake(blobCoordPosterId, POSTER_WRITE);
-      memset(blobCoord, 0, sizeof(*blobCoord));
-      posterGive(blobCoordPosterId);
-      empty_data_im3d(&im3d);
-      return EXEC;
-    }
-  }
-
-  {
-    DATA_PT3D *b;
-    unsigned char *p;
-    double x, y, z;
-    int i, j, n, t;
-
-    /* compute average */
-    x = y = z = 0;
-    n = t = 0;
-    b = im3d.points_tab + blob->x;
-    p = (unsigned char *)thrBackProj->imageData +
-      off * thrBackProj->widthStep + blob->x;
-    for(i = 0; i < blob->height; i++) {
-      for(j = 0; j < blob->width; j++) {
-	if (b->state == GOOD_PT3D) {
-	  x += b->coord_1 * (*p);
-	  y += b->coord_2 * (*p);
-	  z += b->coord_3 * (*p);
-	  n += *p;
-	  t++;
-	}
-	b++;
-	p++;
-      }
-      b += im3d.header.nbcol - blob->width;
-      p += thrBackProj->widthStep - blob->width;
-    }
-
-    fprintf(stderr, "using %d 3d points\n", t);
-    if (n <= 0) {
-      posterTake(blobCoordPosterId, POSTER_WRITE);
-      memset(blobCoord, 0, sizeof(*blobCoord));
-      posterGive(blobCoordPosterId);
-      empty_data_im3d(&im3d);
-      return EXEC;
-    }
-
-    /* XXX temporarily convert camera 3d frame to pom's one */
-    pose.matrix.matrix[3] = z / n + 0.02;
-    pose.matrix.matrix[7] = -x / n;
-    pose.matrix.matrix[11] = -y / n;
-  }}
-
-  empty_data_im3d(&im3d);
-
-  t3dComp(&pose, &c2w);
-  posterTake(blobCoordPosterId, POSTER_WRITE);
-  *blobCoord = pose;
-  posterGive(blobCoordPosterId);
-
-  if (blob->feedback == HUEBLOB_ENABLE)
-    t3dFPrint(stdout, &pose);
-
-  return EXEC;
-#endif
+  //FIXME: get depth information from disparity.
+  //FIXME: compute average.
 }
