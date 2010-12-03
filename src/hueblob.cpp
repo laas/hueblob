@@ -25,9 +25,9 @@ HueBlob::HueBlob()
     sync_(3),
     blobs_pub_(nh_.advertise<hueblob::Blobs>("blobs", 5)),
     AddObject_srv_(nh_.advertiseService
-		   ("add_objet", &HueBlob::AddObjectCallback, this)),
+		   ("add_object", &HueBlob::AddObjectCallback, this)),
     TrackObject_srv_(nh_.advertiseService
-		   ("track_objet", &HueBlob::TrackObjectCallback, this)),
+		   ("track_object", &HueBlob::TrackObjectCallback, this)),
     objects_(),
     check_synced_timer_(),
     left_received_(),
@@ -62,10 +62,10 @@ HueBlob::spin()
   ROS_DEBUG("Entering the node main loop.");
   while (ros::ok())
     {
-      trackBlob("FIXME");
+      hueblob::Blob blob = trackBlob("FIXME");
 
       hueblob::Blobs blobs;
-      //FIXME: fill structure before publishing.
+      blobs.blobs.push_back(blob);
       blobs_pub_.publish(blobs);
 
       ros::spinOnce();
@@ -133,6 +133,7 @@ bool
 HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 			   hueblob::AddObject::Response& response)
 {
+  response.status = 0;
   CvHistogram** objHist;
   cv::Ptr<IplImage> gmodel;
   cv::Ptr<IplImage> mask;
@@ -145,7 +146,7 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   // 0 (black-gray-white) to 255 (pure spectrum color)
   float sat_range[] = { 0, 250 };
   float* hist_ranges[] = { hue_range, sat_range };
-  cv::Ptr<IplImage> model;
+  IplImage* model;
 
   // Convert ROS image to OpenCV.
   try
@@ -235,29 +236,34 @@ namespace
   }
 } // end of anonymous namespace.
 
-void
+
+#define RESIZE_IF_NEEDED(IMG, COMPONENTS)                               \
+  do {                                                                  \
+    if (!IMG                                                            \
+        || IMG->width != lastImage->width                               \
+        || IMG->height != lastImage->height)                            \
+      IMG = cvCreateImage(cvGetSize(lastImage), 8, COMPONENTS);         \
+  } while(0)
+
+hueblob::Blob
 HueBlob::trackBlob(const std::string& name)
 {
-  ROS_INFO("track");
   hueblob::Box blob;
+  hueblob::Blob blob_;
+  blob_.name = name;
 
   // Image acquisition.
-  if (! lastImage)
-    {
-      return;
-    }
+  if (!lastImage || !lastImage->width || !lastImage->height)
+    return blob_;
 
-  if (!blobTrackImage[0]
-      || !blobTrackImage[0]->width || !blobTrackImage[0]->height)
-    blobTrackImage[0] = cvCreateImage(cvGetSize(lastImage), 8, 3);
-  if (!blobTrackImage[1]
-      || !blobTrackImage[1]->width || !blobTrackImage[1]->height)
-    blobTrackImage[1] = cvCreateImage(cvGetSize(lastImage), 8, 1);
-  if (!blobTrackImage[2]
-      || !blobTrackImage[2]->width || !blobTrackImage[2]->height)
-    blobTrackImage[2] = cvCreateImage(cvGetSize(lastImage), 8, 1);
+  RESIZE_IF_NEEDED(blobTrackImage[0], 3);
+  RESIZE_IF_NEEDED(blobTrackImage[1], 1);
+  RESIZE_IF_NEEDED(blobTrackImage[2], 1);
+  RESIZE_IF_NEEDED(thrBackProj, 3);
+  RESIZE_IF_NEEDED(hstrackImage[0], 1);
+  RESIZE_IF_NEEDED(hstrackImage[1], 1);
 
-  //cvCvtColor(&image, blobTrackImage[0], CV_BGR2HSV);
+  cvCvtColor(lastImage, blobTrackImage[0], CV_BGR2HSV);
 
   for(unsigned i=1; i < 3; ++i)
     cvCvtColor(lastImage, blobTrackImage[i], CV_BGR2GRAY);
@@ -267,7 +273,7 @@ HueBlob::trackBlob(const std::string& name)
   if (!object.nViews)
     {
       ROS_ERROR("Invalid model");
-      return;
+      return blob_;
     }
 
   resetSearchZone(blob, thrBackProj);
@@ -277,14 +283,16 @@ HueBlob::trackBlob(const std::string& name)
   cvCvtPixToPlane(blobTrackImage[0], NULL, hstrackImage[1], NULL, NULL);
 
   // iterate over all templates
+  IplImage* hstrackImage_[2] = { hstrackImage[0], hstrackImage[1] };
+
   if (object.nViews <= 1)
-    cvCalcBackProject(hstrackImage, thrBackProj, object.modelHistogram[0]);
+    cvCalcBackProject(hstrackImage_, thrBackProj, object.modelHistogram[0]);
   else
     {
       memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
       for(int nmodel = 0; nmodel < object.nViews; ++nmodel)
 	{
-	  cvCalcBackProject(hstrackImage, trackBackProj,
+	  cvCalcBackProject(hstrackImage_, trackBackProj,
 			    object.modelHistogram[nmodel]);
 
 	  unsigned char* s = (unsigned char *)trackBackProj->imageData;
@@ -314,6 +322,7 @@ HueBlob::trackBlob(const std::string& name)
 	{
 	  blob.x = blob.y = -1;
 	  ROS_WARN("cannot find blob");
+          return blob_;
 	}
 
       blob.x = components.rect.x;
@@ -321,6 +330,12 @@ HueBlob::trackBlob(const std::string& name)
       blob.width = components.rect.width;
       blob.height = components.rect.height;
     }
+
+
+  blob_.position.transform.translation.x = blob.x;
+  blob_.position.transform.translation.y = blob.y;
+  blob_.position.transform.translation.z = blob.width;
+  return blob_;
 
   //FIXME: get depth information from disparity.
   //FIXME: compute average.

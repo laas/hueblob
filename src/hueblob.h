@@ -90,7 +90,7 @@ protected:
 
   void checkInputsSynchronized();
 
-  void trackBlob(const std::string&);
+  hueblob::Blob trackBlob(const std::string&);
 
   /// \}
 
