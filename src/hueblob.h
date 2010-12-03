@@ -90,7 +90,7 @@ protected:
 
   void checkImagesSize(int height, int width);
 
-  void trackBlob();
+  void trackBlob(const std::string&);
 
   /// \}
 
@@ -163,6 +163,7 @@ protected:
   cv::Ptr<IplImage> hstrackImage[2];
   cv::Ptr<IplImage> trackBackProj;
   cv::Ptr<IplImage> thrBackProj;
+  cv::Ptr<IplImage> blobTrackImage[3];
 
   // HueBlobObj& getObject(const char *name);
   // void addObject(const char *name, double anchor_x,

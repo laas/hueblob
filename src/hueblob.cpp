@@ -51,7 +51,7 @@ HueBlob::spin()
   ROS_DEBUG("Entering the node main loop.");
   while (ros::ok())
     {
-      trackBlob();
+      trackBlob("FIXME");
 
       hueblob::Blobs blobs;
       //FIXME: fill structure before publishing.
@@ -185,12 +185,97 @@ HueBlob::TrackObjectCallback(hueblob::TrackObject::Request& request,
   return true;
 }
 
-void
-HueBlob::trackBlob()
+namespace
 {
-  Object object;
+  /* reset search zone if it is incorrect */
+  void resetSearchZone(hueblob::Box& blob, const cv::Ptr<IplImage>& thrBackProj)
+  {
+    if (blob.x < 0 || blob.y < 0)
+      {
+	blob.x = 0;
+	blob.y = 0;
+	blob.width = thrBackProj->width-1;
+	blob.height = thrBackProj->height-1;
+      }
 
-  // Image.
+    if (blob.x + blob.width > thrBackProj->width - 1)
+      blob.width = thrBackProj->width - 1 - blob.x;
+    if (blob.y + blob.height > thrBackProj->height - 1)
+      blob.height = thrBackProj->height - 1 - blob.y;
+  }
+} // end of anonymous namespace.
+
+void
+HueBlob::trackBlob(const std::string& name)
+{
+  hueblob::Box blob;
+
+  // Image acquisition.
+  IplImage image(*lastImage);
+
+  cvCvtColor(&image, blobTrackImage[0], CV_BGR2HSV);
+  for(unsigned i=1; i < 3; ++i)
+    cvCvtColor(&image, blobTrackImage[i], CV_BGR2GRAY);
+
+  // Blob detection.
+  Object& object = objects_[name];
+  if (!object.nViews)
+    {
+      ROS_ERROR("Invalid model");
+      return;
+    }
+
+  resetSearchZone(blob, thrBackProj);
+
+  // convert source to HSV
+  cvCvtPixToPlane(blobTrackImage[0], hstrackImage[0], NULL, NULL, NULL);
+  cvCvtPixToPlane(blobTrackImage[0], NULL, hstrackImage[1], NULL, NULL);
+
+  // iterate over all templates
+  if (object.nViews <= 1)
+    cvCalcBackProject(hstrackImage, thrBackProj, object.modelHistogram[0]);
+  else
+    {
+      memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
+      for(int nmodel = 0; nmodel < object.nViews; ++nmodel)
+	{
+	  cvCalcBackProject(hstrackImage, trackBackProj, object.modelHistogram[nmodel]);
+
+	  unsigned char* s = (unsigned char *)trackBackProj->imageData;
+	  unsigned char* d = (unsigned char *)thrBackProj->imageData;
+	  for(int i = 0; i < thrBackProj->imageSize; ++i)
+	    {
+	      int p = *s + *d;
+	      if (p > 255)
+		p = 255;
+	      *d = p;
+	      s++; d++;
+	    }
+	}
+
+      cvThreshold(thrBackProj, trackBackProj, 32, 0, CV_THRESH_TOZERO);
+      cvSmooth(trackBackProj, thrBackProj, CV_MEDIAN, 3);
+
+      CvBox2D box;
+      CvConnectedComp components;
+      CvTermCriteria criteria = cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
+      cvCamShift(thrBackProj,
+		 cvRect(blob.x, blob.y, blob.width, blob.height),
+		 criteria, &components, &box);
+
+      if (!box.size.height || !box.size.width)
+	{
+	  blob.x = blob.y = -1;
+	  ROS_WARN("cannot find blob");
+	}
+
+      blob.x = components.rect.x;
+      blob.y = components.rect.y;
+      blob.width = components.rect.width;
+      blob.height = components.rect.height;
+    }
+
+
 #ifdef FROM_GENOM
   struct HueBlobObj *objmodel;
   CvTermCriteria criteria = cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
@@ -205,122 +290,6 @@ HueBlob::trackBlob()
   int i;
   DATA_IM3D im3d;
   T3D c2w;
-
-  /* --- retrieve video image --- */
-
-  if (posterTake(blobImagePosterId, POSTER_READ) != OK) {
-    *report = errnoGet();
-    return ETHER;
-  }
-  baseline = blobImage->calibration.baseline;
-  memcpy(intrinsic, blobImage->image[0].calibration.intrirect,
-	 sizeof(intrinsic));
-  c2w = t3dBryanIdentity;
-  c2w.bryan.yaw = blobImage->image[0].pos.sensorToMain.euler.yaw;
-  c2w.bryan.pitch = blobImage->image[0].pos.sensorToMain.euler.pitch;
-  c2w.bryan.roll = blobImage->image[0].pos.sensorToMain.euler.roll;
-  c2w.bryan.x = blobImage->image[0].pos.sensorToMain.euler.x;
-  c2w.bryan.y = blobImage->image[0].pos.sensorToMain.euler.y;
-  c2w.bryan.z = blobImage->image[0].pos.sensorToMain.euler.z;
-  c2w.flags |= T3D_ALLOW_CONVERSION;
-  for(i=0; i<2; i++) {
-    cvInitImageHeader(&viam,
-		      cvSize(blobImage->image[i].width,
-			     blobImage->image[i].height),
-		      blobImage->image[i].depth,
-		      blobImage->image[i].nChannels,
-		      IPL_ORIGIN_TL, 4);
-    cvSetData(&viam,
-	      &blobImage->image[i].data[blobImage->image[i].dataOffset],
-	      blobImage->image[i].widthStep);
-    cvCvtColor(&viam, blobtrackImage[i+1], CV_BGR2GRAY);
-    if (i == 0)
-      cvCvtColor(&viam, blobtrackImage[0], CV_BGR2HSV);
-  }
-  posterGive(blobImagePosterId);
-
-  /* --- detect blob --- */
-
-  objmodel = getObject(blob->object);
-  if (!objmodel || objmodel->nViews == 0) {
-    *report = S_hueblob_NO_MODEL;
-    return ETHER;
-  }
-
-  /* reset search zone if it is incorrect */
-  if (blob->x < 0 || blob->y < 0) {
-    blob->x = 0;
-    blob->y = 0;
-    blob->width = thrBackProj->width-1;
-    blob->height = thrBackProj->height-1;
-  }
-  if (blob->x+blob->width > thrBackProj->width-1)
-    blob->width = thrBackProj->width-1 - blob->x;
-  if (blob->y+blob->height > thrBackProj->height-1)
-    blob->height = thrBackProj->height-1 - blob->y;
-
-  /* convert source to HSV */
-  cvCvtPixToPlane(blobtrackImage[0], hstrackImage[0], NULL, NULL, NULL);
-  cvCvtPixToPlane(blobtrackImage[0], NULL, hstrackImage[1], NULL, NULL);
-
-  /* iterate over all templates */
-  if (objmodel->nViews <= 1) {
-
-    cvCalcBackProject(hstrackImage, thrBackProj, objmodel->modelHistogram[0]);
-
-  } else {
-
-    memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
-    for(nmodel = 0; nmodel<objmodel->nViews; nmodel++) {
-      cvCalcBackProject(hstrackImage, trackBackProj, objmodel->modelHistogram[nmodel]);
-
-      s = (unsigned char *)trackBackProj->imageData;
-      d = (unsigned char *)thrBackProj->imageData;
-      for(i=0;i<thrBackProj->imageSize;i++) {
-	p = *s + *d; if (p>255) p = 255;
-	*d = p;
-
-	s++; d++;
-      }
-    }
-  }
-
-  cvThreshold(thrBackProj, trackBackProj, 32, 0, CV_THRESH_TOZERO);
-  cvSmooth(trackBackProj, thrBackProj, CV_MEDIAN, 3);
-
-  i = cvCamShift(thrBackProj,
-		 cvRect(blob->x, blob->y, blob->width, blob->height),
-		 criteria, &components, &object);
-  if (object.size.height == 0 || object.size.width == 0) {
-    blob->x = blob->y = -1;
-    warnx("cannot find blob");
-#ifdef HUEBLOB_DISPLAY
-    if (blob->feedback == HUEBLOB_ENABLE) {
-	cvNamedWindow("Blob image", 0);
-	cvResizeWindow("Blob image", 320, 240);
-	cvShowImage("Blob image", blobtrackImage[0]);
-    }
-#endif
-    return EXEC;
-  }
-
-  blob->x = components.rect.x;
-  blob->y = components.rect.y;
-  blob->width = components.rect.width;
-  blob->height = components.rect.height;
-
-#ifdef HUEBLOB_DISPLAY
-  if (blob->feedback == HUEBLOB_ENABLE) {
-    cvRectangle(blobtrackImage[0],
-		cvPoint(blob->x, blob->y),
-		cvPoint(blob->x+blob->width, blob->y+blob->height),
-		cvScalar(255), 1);
-    cvNamedWindow("Blob image", 0);
-    cvResizeWindow("Blob image", 320, 240);
-    cvShowImage("Blob image", blobtrackImage[0]);
-  }
-#endif /* HUEBLOB_DISPLAY */
-
   /* --- compute 3D position --- */
 
   {
