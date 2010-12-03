@@ -42,7 +42,7 @@ HueBlob::HueBlob()
     blobTrackImage()
 {
   // Parameter initialization.
-  ros::param::param<std::string>("stereo", stereo_topic_prefix_, "");
+  ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<double>("threshold", threshold_, 75.);
 
   // Initialize the node subscribers, publishers and filters.
@@ -84,14 +84,16 @@ namespace
 void
 HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 {
+  ROS_INFO("%s",stereo_prefix.c_str());
   stereo_topic_prefix_ = nh_.resolveName(stereo_prefix);
+  ROS_INFO("%s",stereo_topic_prefix_.c_str());
 
   const std::string left_topic =
-    ros::names::clean(stereo_prefix + "/left/image_mono");
+    ros::names::clean(stereo_topic_prefix_ + "/left/image_mono");
   const std::string right_topic =
-    ros::names::clean(stereo_prefix + "/right/image_mono");
+    ros::names::clean(stereo_topic_prefix_ + "/right/image_mono");
   const std::string disparity_topic =
-    ros::names::clean(stereo_prefix + "/disparity");
+    ros::names::clean(stereo_topic_prefix_ + "/disparity");
 
   left_sub_.subscribe(it_, left_topic, 3);
   right_sub_.subscribe(it_, right_topic, 3);
@@ -124,7 +126,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::ImageConstPtr& right,
 		       const stereo_msgs::DisparityImageConstPtr& disparity_msg)
 {
-  lastImage = bridge_.imgMsgToCv(left,"rgb8");
+  lastImage = bridge_.imgMsgToCv(left,"bgr8");
 }
 
 bool
@@ -236,14 +238,29 @@ namespace
 void
 HueBlob::trackBlob(const std::string& name)
 {
+  ROS_INFO("track");
   hueblob::Box blob;
 
   // Image acquisition.
-  IplImage image(*lastImage);
+  if (! lastImage)
+    {
+      return;
+    }
 
-  cvCvtColor(&image, blobTrackImage[0], CV_BGR2HSV);
+  if (!blobTrackImage[0]
+      || !blobTrackImage[0]->width || !blobTrackImage[0]->height)
+    blobTrackImage[0] = cvCreateImage(cvGetSize(lastImage), 8, 3);
+  if (!blobTrackImage[1]
+      || !blobTrackImage[1]->width || !blobTrackImage[1]->height)
+    blobTrackImage[1] = cvCreateImage(cvGetSize(lastImage), 8, 1);
+  if (!blobTrackImage[2]
+      || !blobTrackImage[2]->width || !blobTrackImage[2]->height)
+    blobTrackImage[2] = cvCreateImage(cvGetSize(lastImage), 8, 1);
+
+  //cvCvtColor(&image, blobTrackImage[0], CV_BGR2HSV);
+
   for(unsigned i=1; i < 3; ++i)
-    cvCvtColor(&image, blobTrackImage[i], CV_BGR2GRAY);
+    cvCvtColor(lastImage, blobTrackImage[i], CV_BGR2GRAY);
 
   // Blob detection.
   Object& object = objects_[name];

@@ -170,7 +170,7 @@ protected:
   int all_received_;
 
   // FIXME:
-  cv::Ptr<IplImage> lastImage;
+  IplImage* lastImage;
   cv::Ptr<IplImage> trackImage;
   cv::Ptr<IplImage> hstrackImage[2];
   cv::Ptr<IplImage> trackBackProj;
