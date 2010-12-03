@@ -89,11 +89,33 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 	   disparity_topic.c_str());
 }
 
+
+#define CHECK_IMAGE_SIZE_(IMG)						\
+  do {									\
+    if (!IMG || width != IMG->width || height != IMG->height)		\
+      IMG = cvCreateImage(cvSize(width, height), 8, 3);			\
+  } while (0)
+
+void
+HueBlob::checkImagesSize(int width, int height)
+{
+  CHECK_IMAGE_SIZE_(trackImage);
+  CHECK_IMAGE_SIZE_(hstrackImage[0]);
+  CHECK_IMAGE_SIZE_(hstrackImage[1]);
+  CHECK_IMAGE_SIZE_(trackBackProj);
+  CHECK_IMAGE_SIZE_(thrBackProj);
+}
+
+#undef CHECK_IMAGE_SIZE_
+
 void
 HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::ImageConstPtr& right,
 		       const stereo_msgs::DisparityImageConstPtr& disparity_msg)
 {
+  // First, resize the images if required.
+  checkImagesSize(left->width, left->height);
+
   //FIXME:
 }
 

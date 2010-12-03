@@ -85,6 +85,13 @@ protected:
 
   /// \}
 
+  /// \name Internal methods.
+  /// \{
+
+  void checkImagesSize(int height, int width);
+
+  /// \}
+
  private:
   /// \brief Define the synchronization policy.
   typedef message_filters::sync_policies::ExactTime<
@@ -147,6 +154,12 @@ protected:
   ///
   /// This associates each object name to its definition.
   std::map<std::string, Object> objects_;
+
+  // FIXME:
+  cv::Ptr<IplImage> trackImage;
+  cv::Ptr<IplImage> hstrackImage[2];
+  cv::Ptr<IplImage> trackBackProj;
+  cv::Ptr<IplImage> thrBackProj;
 
   // HueBlobObj& getObject(const char *name);
   // void addObject(const char *name, double anchor_x,
