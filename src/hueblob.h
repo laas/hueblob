@@ -90,6 +90,8 @@ protected:
 
   void checkImagesSize(int height, int width);
 
+  void trackBlob();
+
   /// \}
 
  private:
@@ -156,6 +158,7 @@ protected:
   std::map<std::string, Object> objects_;
 
   // FIXME:
+  cv::Ptr<IplImage> lastImage;
   cv::Ptr<IplImage> trackImage;
   cv::Ptr<IplImage> hstrackImage[2];
   cv::Ptr<IplImage> trackBackProj;
