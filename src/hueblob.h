@@ -88,7 +88,7 @@ protected:
   /// \name Internal methods.
   /// \{
 
-  void checkImagesSize(int height, int width);
+  void checkInputsSynchronized();
 
   void trackBlob(const std::string&);
 
@@ -156,6 +156,18 @@ protected:
   ///
   /// This associates each object name to its definition.
   std::map<std::string, Object> objects_;
+
+  /// \brief Timer used to periodically report bad synchronization.
+  ros::WallTimer check_synced_timer_;
+
+  /// \brief How many left images received so far?
+  int left_received_;
+  /// \brief How many right images received so far?
+  int right_received_;
+  /// \brief How many disparity images received so far?
+  int disp_received_;
+  /// \brief How many synchronized images received so far?
+  int all_received_;
 
   // FIXME:
   cv::Ptr<IplImage> lastImage;

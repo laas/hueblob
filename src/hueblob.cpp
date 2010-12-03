@@ -28,7 +28,18 @@ HueBlob::HueBlob()
 		   ("add_objet", &HueBlob::AddObjectCallback, this)),
     TrackObject_srv_(nh_.advertiseService
 		   ("track_objet", &HueBlob::TrackObjectCallback, this)),
-    objects_()
+    objects_(),
+    check_synced_timer_(),
+    left_received_(),
+    right_received_(),
+    disp_received_(),
+    all_received_(),
+    lastImage(),
+    trackImage(),
+    hstrackImage(),
+    trackBackProj(),
+    thrBackProj(),
+    blobTrackImage()
 {
   // Parameter initialization.
   ros::param::param<std::string>("stereo", stereo_topic_prefix_, "");
@@ -62,6 +73,14 @@ HueBlob::spin()
     }
 }
 
+namespace
+{
+  void increment(int* value)
+  {
+    ++(*value);
+  }
+} // end of anonymous namespace.
+
 void
 HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 {
@@ -83,6 +102,15 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
   sync_.connectInput(left_sub_, right_sub_, disparity_sub_);
   sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
 				     this, _1, _2, _3));
+
+  // Complain every 30s if the topics appear unsynchronized
+  left_sub_.registerCallback(boost::bind(increment, &left_received_));
+  right_sub_.registerCallback(boost::bind(increment, &right_received_));
+  disparity_sub_.registerCallback(boost::bind(increment, &disp_received_));
+  sync_.registerCallback(boost::bind(increment, &all_received_));
+  check_synced_timer_ =
+    nh_.createWallTimer(ros::WallDuration(30.0),
+			boost::bind(&HueBlob::checkInputsSynchronized, this));
 
   //FIXME: add callback checking that images are received.
 
@@ -279,4 +307,23 @@ HueBlob::trackBlob(const std::string& name)
 
   //FIXME: get depth information from disparity.
   //FIXME: compute average.
+}
+
+void
+HueBlob::checkInputsSynchronized()
+{
+  int threshold = 3 * all_received_;
+  if (left_received_ > threshold || right_received_ > threshold || disp_received_ > threshold)
+    {
+      ROS_WARN("[hueblob] Low number of synchronized left/right/disparity triplets received.\n"
+	       "Left images received: %d\n"
+	       "Right images received: %d\n"
+	       "Disparity images received: %d\n"
+	       "Synchronized triplets: %d\n"
+	       "Possible issues:\n"
+	       "\t* stereo_image_proc is not running.\n"
+	       "\t* The cameras are not synchronized.\n"
+	       "\t* The network is too slow. One or more images are dropped from each triplet.",
+	       left_received_, right_received_, disp_received_, all_received_);
+    }
 }
