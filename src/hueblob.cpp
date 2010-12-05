@@ -26,6 +26,10 @@ HueBlob::HueBlob()
     blobs_pub_(nh_.advertise<hueblob::Blobs>("blobs", 5)),
     AddObject_srv_(nh_.advertiseService
 		   ("add_object", &HueBlob::AddObjectCallback, this)),
+    ListObject_srv_(nh_.advertiseService
+		    ("list_object", &HueBlob::ListObjectCallback, this)),
+    RmObject_srv_(nh_.advertiseService
+		  ("rm_object", &HueBlob::RmObjectCallback, this)),
     TrackObject_srv_(nh_.advertiseService
 		   ("track_object", &HueBlob::TrackObjectCallback, this)),
     objects_(),
@@ -206,6 +210,24 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   cvGetMinMaxHistValue(*objHist, 0, &max, 0, 0 );
   cvConvertScale((*objHist)->bins, (*objHist)->bins, max?255./max:0., 0);
 
+  return true;
+}
+
+bool
+HueBlob::ListObjectCallback(hueblob::ListObject::Request& request,
+			    hueblob::ListObject::Response& response)
+{
+  typedef std::pair<const std::string&, const Object&> iterator_t;
+  BOOST_FOREACH(iterator_t it, objects_)
+    response.objects.push_back(it.first);
+  return true;
+}
+
+bool
+HueBlob::RmObjectCallback(hueblob::RmObject::Request& request,
+			  hueblob::RmObject::Response& response)
+{
+  objects_.erase(request.name);
   return true;
 }
 

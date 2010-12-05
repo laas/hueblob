@@ -17,10 +17,14 @@
 # include <sensor_msgs/Image.h>
 # include <stereo_msgs/DisparityImage.h>
 
-
-# include "hueblob/AddObject.h"
+// Messages.
 # include "hueblob/Blob.h"
 # include "hueblob/Blobs.h"
+
+// Services.
+# include "hueblob/AddObject.h"
+# include "hueblob/ListObject.h"
+# include "hueblob/RmObject.h"
 # include "hueblob/TrackObject.h"
 
 
@@ -78,6 +82,15 @@ protected:
   /// \brief AddObject service callback.
   bool AddObjectCallback(hueblob::AddObject::Request& request,
 			 hueblob::AddObject::Response& response);
+
+  /// \brief ListObject service callback.
+  bool ListObjectCallback(hueblob::ListObject::Request& request,
+			  hueblob::ListObject::Response& response);
+
+  /// \brief RmObject service callback.
+  bool RmObjectCallback(hueblob::RmObject::Request& request,
+			hueblob::RmObject::Response& response);
+
 
   /// \brief TrackObject service callback.
   bool TrackObjectCallback(hueblob::TrackObject::Request& request,
@@ -149,6 +162,12 @@ protected:
   /// \brief AddObject service server.
   ros::ServiceServer AddObject_srv_;
 
+  /// \brief ListObject service server.
+  ros::ServiceServer ListObject_srv_;
+
+  /// \brief RmObject service server.
+  ros::ServiceServer RmObject_srv_;
+
   /// \brief TrackObject service server.
   ros::ServiceServer TrackObject_srv_;
 
@@ -176,10 +195,6 @@ protected:
   cv::Ptr<IplImage> trackBackProj;
   cv::Ptr<IplImage> thrBackProj;
   cv::Ptr<IplImage> blobTrackImage[3];
-
-  // HueBlobObj& getObject(const char *name);
-  // void addObject(const char *name, double anchor_x,
-  //                       double anchor_y, double anchor_z);
 };
 
 #endif //! HUEBLOB_HUEBLOB_H
