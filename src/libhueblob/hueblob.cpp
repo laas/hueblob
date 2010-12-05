@@ -61,24 +61,15 @@ HueBlob::~HueBlob()
 void
 HueBlob::spin()
 {
-  typedef std::pair<const std::string&, const Object&> iterator_t;
-
   ros::Rate loop_rate(10);
 
   ROS_DEBUG("Entering the node main loop.");
   while (ros::ok())
     {
-      hueblob::Blobs blobs;
+      hueblob::Blob blob = trackBlob("FIXME");
 
-      //FIXME: currently iterate on all blobs.
-      // Should we prune untrackable blobs?
-      // Should we provide a way to disable tracking
-      //  for some objects?
-      BOOST_FOREACH(iterator_t it, objects_)
-	{
-	  hueblob::Blob blob = trackBlob(it.first);
-	  blobs.blobs.push_back(blob);
-	}
+      hueblob::Blobs blobs;
+      blobs.blobs.push_back(blob);
       blobs_pub_.publish(blobs);
 
       ros::spinOnce();
@@ -147,17 +138,6 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 			   hueblob::AddObject::Response& response)
 {
   response.status = 0;
-  cv::Ptr<IplImage> gmodel;
-  cv::Ptr<IplImage> mask;
-  cv::Ptr<IplImage> hsv;
-  cv::Ptr<IplImage> hs_planes[2];
-  float max;
-  int hist_size[] = {25, 25};
-  // 0 (~0°red) to 180 (~360°red again)
-  float hue_range[] = { 0, 250 };
-  // 0 (black-gray-white) to 255 (pure spectrum color)
-  float sat_range[] = { 0, 250 };
-  float* hist_ranges[] = { hue_range, sat_range };
   IplImage* model;
 
   // Convert ROS image to OpenCV.
@@ -187,33 +167,8 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   object.anchor_y = request.anchor.y;
   object.anchor_z = request.anchor.z;
 
-  ++object.nViews;
-
-  // compute mask
-  gmodel = cvCreateImage(cvGetSize(model), 8, 1);
-  mask = cvCreateImage(cvGetSize(model), 8, 1);
-  cvCvtColor(model, gmodel, CV_BGR2GRAY);
-  cvThreshold(gmodel, mask, 5, 255, CV_THRESH_BINARY);
-
-  // create histogram
-  hsv = cvCreateImage(cvGetSize(model), 8, 3);
-  hs_planes[0] = cvCreateImage(cvGetSize(model), 8, 1);
-  hs_planes[1] = cvCreateImage(cvGetSize(model), 8, 1);
-
-  cvCvtColor(model, hsv, CV_BGR2HSV);
-  cvCvtPixToPlane(hsv, hs_planes[0], NULL, NULL, NULL);
-  cvCvtPixToPlane(hsv, NULL, hs_planes[1], NULL, NULL);
-
-  cv::Ptr<CvHistogram> objHist =
-    cvCreateHist(2, hist_size, CV_HIST_ARRAY, hist_ranges, 1);
-
-  // compute histogram
-  IplImage* hs_planes_[] = {hs_planes[0], hs_planes[1]};
-  cvCalcHist(hs_planes_, objHist, 0, mask);
-  cvGetMinMaxHistValue(objHist, 0, &max, 0, 0 );
-  cvConvertScale(objHist->bins, objHist->bins, max ? 255. / max : 0., 0);
-
-  object.modelHistogram.push_back(objHist);
+  /// Add the view to the object.
+  object.addView(*model);
 
   return true;
 }
@@ -297,9 +252,9 @@ HueBlob::trackBlob(const std::string& name)
 
   // Blob detection.
   Object& object = objects_[name];
-  if (!object.nViews)
+  if (object.modelHistogram.empty())
     {
-      ROS_ERROR("Invalid model");
+      ROS_ERROR("Fail to track object as no view is available.");
       return blob_;
     }
 
@@ -312,12 +267,13 @@ HueBlob::trackBlob(const std::string& name)
   // iterate over all templates
   IplImage* hstrackImage_[2] = { hstrackImage[0], hstrackImage[1] };
 
-  if (object.nViews <= 1)
+  int nViews = object.modelHistogram.size();
+  if (nViews <= 1)
     cvCalcBackProject(hstrackImage_, thrBackProj, object.modelHistogram[0]);
   else
     {
       memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
-      for(int nmodel = 0; nmodel < object.nViews; ++nmodel)
+      for(int nmodel = 0; nmodel < nViews; ++nmodel)
 	{
 	  cvCalcBackProject(hstrackImage_, trackBackProj,
 			    object.modelHistogram[nmodel]);

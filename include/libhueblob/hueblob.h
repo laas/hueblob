@@ -17,6 +17,8 @@
 # include <sensor_msgs/Image.h>
 # include <stereo_msgs/DisparityImage.h>
 
+# include "libhueblob/object.hh"
+
 // Messages.
 # include "hueblob/Blob.h"
 # include "hueblob/Blobs.h"
@@ -27,19 +29,6 @@
 # include "hueblob/RmObject.h"
 # include "hueblob/TrackObject.h"
 
-
-
-class CvHistogram;
-
-/// \brief Define an object in the object database.
-struct Object {
-  double anchor_x;
-  double anchor_y;
-  double anchor_z;
-
-  int nViews;
-  std::vector<cv::Ptr<CvHistogram> > modelHistogram;
-};
 
 /// \brief Main class of the HueBlob node.
 ///
@@ -80,6 +69,9 @@ protected:
 		     const stereo_msgs::DisparityImageConstPtr& disparity_msg);
 
   /// \brief AddObject service callback.
+  ///
+  /// This callback is run when an object is added to the object
+  /// database (see objects_ attribute).
   bool AddObjectCallback(hueblob::AddObject::Request& request,
 			 hueblob::AddObject::Response& response);
 
