@@ -101,15 +101,26 @@ Object::track(const cv::Mat& image)
     cv::calcBackProject(&hsv, 1, channels, modelHistogram[0], backProject,
 			ranges);
   else
-    {
-      assert(0);
+    for(int nmodel = 0; nmodel < nViews; ++nmodel)
+      {
+	cv::Mat backProjectTmp;
+	cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
+			    backProjectTmp, ranges);
 
-      for(int nmodel = 0; nmodel < nViews; ++nmodel)
-	{
-	  cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
-			      backProject, ranges);
-	}
-    }
+	// Merge back projections while taking care of overflows.
+	for (int i = 0 ; i < backProject.rows; ++i)
+	  for (int j = 0 ; j < backProject.cols; ++j)
+	    {
+	      int v =
+		backProject.at<unsigned char>(i, j)
+		+ backProjectTmp.at<unsigned char>(i, j);
+	      if (v <= 0)
+		v = 0;
+	      else if (v >= 255)
+		v = 255;
+	      backProject = v;
+	    }
+      }
 
   cv::threshold(backProject, backProject, 32, 0, CV_THRESH_TOZERO);
   cv::medianBlur(backProject, backProject, 3);
