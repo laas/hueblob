@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include "libhueblob/hueblob.h"
+#include "libhueblob/hueblob.hh"
 
 int main(int argc, char **argv)
 {
