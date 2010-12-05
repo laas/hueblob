@@ -40,6 +40,7 @@ HueBlob::HueBlob()
     disp_received_(),
     all_received_(),
     leftImage_(),
+    leftCamera_(),
     disparity_()
 {
   // Parameter initialization.
@@ -100,20 +101,28 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 
   const std::string left_topic =
     ros::names::clean(stereo_topic_prefix_ + "/left/image_rect_color");
+  const std::string left_camera_topic =
+    ros::names::clean(stereo_topic_prefix_ + "/left/camera_info");
   const std::string right_topic =
     ros::names::clean(stereo_topic_prefix_ + "/right/image_rect_color");
+  const std::string right_camera_topic =
+    ros::names::clean(stereo_topic_prefix_ + "/right/camera_info");
   const std::string disparity_topic =
     ros::names::clean(stereo_topic_prefix_ + "/disparity");
 
   left_sub_.subscribe(it_, left_topic, 3);
+  leftCamera_sub_.subscribe(nh_, left_camera_topic, 3);
   right_sub_.subscribe(it_, right_topic, 3);
+  rightCamera_sub_.subscribe(nh_, right_camera_topic, 3);
   disparity_sub_.subscribe(nh_, disparity_topic, 3);
 
   //FIXME: is it needed to be reentrant?
   //sync_.disconnectAll();
-  sync_.connectInput(left_sub_, right_sub_, disparity_sub_);
+  sync_.connectInput(left_sub_, leftCamera_sub_,
+		     right_sub_, rightCamera_sub_,
+		     disparity_sub_);
   sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
-				     this, _1, _2, _3));
+				     this, _1, _2, _3, _4, _5));
 
   // Complain every 30s if the topics appear unsynchronized
   left_sub_.registerCallback(boost::bind(increment, &left_received_));
@@ -131,10 +140,13 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 
 void
 HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
+		       const sensor_msgs::CameraInfoConstPtr& left_camera,
 		       const sensor_msgs::ImageConstPtr& right,
+		       const sensor_msgs::CameraInfoConstPtr& right_camera,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
   leftImage_ = left;
+  leftCamera_ = left_camera;
   disparity_ = disparity;
 }
 
@@ -214,6 +226,12 @@ namespace
 		const cv::Rect& rect,
 		const double f,
 		const double T,
+		const double Z_min,
+		const double Z_max,
+		const double u0,
+		const double v0,
+		const double px,
+		const double py,
 		cv::Point3d& min,
 		cv::Point3d& max,
 		cv::Point3d& center)
@@ -224,10 +242,14 @@ namespace
 	  unsigned char d = disparity.at<unsigned char>(y, x);
 
 	  //FIXME: check transformation.
-	  double X = x;
-	  double Y = y;
-	  double Z = f * T / d;
+	  double X = (x - u0) / px;
+	  double Y = (y - v0) / py;
+	  double Z = (d > 0) ? (f * T / d) : 0.;
 	  cv::Point3d p(X, Y, Z);
+
+	  // If the point is not part of the horopter, ignore it.
+	  if (Z < Z_min || Z > Z_max)
+	    continue;
 
 	  // Update extrema.
 	  if (p.x < min.x)
@@ -279,11 +301,19 @@ HueBlob::trackBlob(const std::string& name)
   cv::Mat disparity(bridgeDisparity_.imgMsgToCv(imagePtr, "mono8"), false);
 
   // Compute 3d box.
+  const double f = disparity_->f;
+  const double T = disparity_->T;
+  const double Z_min = f * T / disparity_->max_disparity;
+  const double Z_max = f * T / disparity_->min_disparity;
+  const double u0 = leftCamera_->K[0 * 3 + 0];
+  const double v0 = leftCamera_->K[1 * 3 + 1];
+  const double px = leftCamera_->K[0 * 3 + 2];
+  const double py = leftCamera_->K[1 * 3 + 2];
   cv::Point3d min;
   cv::Point3d max;
   cv::Point3d center;
-  get3dBox(image, disparity, rect,
-	   disparity_->f, disparity_->T, min, max, center);
+  get3dBox(image, disparity, rect, f, T,
+	   Z_min, Z_max, u0, v0, px, py, min, max, center);
 
   center.x += object.anchor_x;
   center.y += object.anchor_y;

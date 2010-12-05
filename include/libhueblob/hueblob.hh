@@ -72,7 +72,9 @@ protected:
   /// Called when a synchronized triplet (left, right, disparity)
   /// has been received.
   void imageCallback(const sensor_msgs::ImageConstPtr& left,
+		     const sensor_msgs::CameraInfoConstPtr& left_camera,
 		     const sensor_msgs::ImageConstPtr& right,
+		     const sensor_msgs::CameraInfoConstPtr& right_camera,
 		     const stereo_msgs::DisparityImageConstPtr& disparity_msg);
 
   /// \brief AddObject service callback.
@@ -109,7 +111,12 @@ protected:
  private:
   /// \brief Define the synchronization policy.
   typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::Image, sensor_msgs::Image, stereo_msgs::DisparityImage>
+   sensor_msgs::Image,
+   sensor_msgs::CameraInfo,
+   sensor_msgs::Image,
+   sensor_msgs::CameraInfo,
+   stereo_msgs::DisparityImage
+   >
     SyncPolicy_t;
 
   /// \brief ROS node handle created at start-up.
@@ -143,8 +150,12 @@ protected:
 
   /// \brief Left image subscriber.
   image_transport::SubscriberFilter left_sub_;
+  /// \brief Left camera info subscriber.
+  message_filters::Subscriber<sensor_msgs::CameraInfo> leftCamera_sub_;
   /// \brief Right image subscriber.
   image_transport::SubscriberFilter right_sub_;
+  /// \brief Right camera info subscriber.
+  message_filters::Subscriber<sensor_msgs::CameraInfo> rightCamera_sub_;
   /// \brief Disparity image subscriber.
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
 
@@ -191,6 +202,8 @@ protected:
 
   /// \brief Last received image for the left camera.
   sensor_msgs::ImageConstPtr leftImage_;
+  /// \brief Last received left camera info.
+  sensor_msgs::CameraInfoConstPtr leftCamera_;
   /// \brief Last received disparity.
   stereo_msgs::DisparityImageConstPtr disparity_;
 };
