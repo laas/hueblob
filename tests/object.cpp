@@ -1,3 +1,5 @@
+#include <boost/format.hpp>
+#include <boost/optional.hpp>
 #include <gtest/gtest.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -60,6 +62,36 @@ TEST(TestSuite, add_view)
   EXPECT_EQ(object.modelHistogram.size(), 1u);
 
   viewHistogram(object.modelHistogram[0], "hist.png");
+}
+
+TEST(TestSuite, track)
+{
+  Object object;
+  cv::Mat view = cvLoadImage("./data/door.png");
+  cv::Mat image = cvLoadImage("./data/door-frame.png");
+  object.addView(view);
+
+  EXPECT_EQ(object.modelHistogram.size(), 1u);
+
+  boost::optional<cv::RotatedRect> rrect = object.track(image);
+
+  // Check that tracking succeed.
+  EXPECT_TRUE(rrect);
+
+  cv::Rect rect = rrect->boundingRect();
+
+  boost::format fmt("Blob location: %dx%d+%dx%d");
+  fmt % rect.x % rect.y % rect.width % rect.height;
+
+  std::cout << fmt << std::endl;
+
+  cv::Point top_left(rect.x, rect.y);
+  cv::Point bottom_right(rect.x + rect.width, rect.y + rect.height);
+  cv::rectangle(image, top_left, bottom_right,
+		cv::Scalar(0, 0, 255, 255), CV_FILLED);
+
+  if(!cv::imwrite("tracking_result.png", image))
+    std::cerr << "Failed to save image.";
 }
 
 int main(int argc, char **argv)
