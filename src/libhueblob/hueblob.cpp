@@ -93,9 +93,9 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
   ROS_INFO("%s",stereo_topic_prefix_.c_str());
 
   const std::string left_topic =
-    ros::names::clean(stereo_topic_prefix_ + "/left/image_mono");
+    ros::names::clean(stereo_topic_prefix_ + "/left/image_rect_color");
   const std::string right_topic =
-    ros::names::clean(stereo_topic_prefix_ + "/right/image_mono");
+    ros::names::clean(stereo_topic_prefix_ + "/right/image_rect_color");
   const std::string disparity_topic =
     ros::names::clean(stereo_topic_prefix_ + "/disparity");
 
