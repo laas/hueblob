@@ -46,6 +46,18 @@ TEST(TestSuite, simple)
   EXPECT_EQ(object.modelHistogram.size(), 0);
 }
 
+TEST(TestSuite, hue_saturation)
+{
+  Object object;
+  cv::Ptr<IplImage> img = cvLoadImage("./data/door.png");
+  HueSaturation hs = HueSaturation(*img);
+
+  if(!cvSaveImage("hue.png", hs.h))
+    std::cerr << "Failed to save hue image.";
+  if(!cvSaveImage("saturation.png", hs.s))
+    std::cerr << "Failed to save saturation image.";
+}
+
 TEST(TestSuite, compute_mask)
 {
   Object object;
