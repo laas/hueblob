@@ -1,19 +1,16 @@
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/video/tracking.hpp>
 #include "libhueblob/object.hh"
 
-HueSaturation::HueSaturation(const IplImage& image)
-  : h(cvCreateImage(cvGetSize(&image), 8, 1)),
-    s(cvCreateImage(cvGetSize(&image), 8, 1)),
-    planes()
-{
-  cv::Ptr<IplImage> hsv = cvCreateImage(cvGetSize(&image), 8, 3);
-  cvCvtColor(&image, hsv, CV_BGR2HSV);
+// Histogram parameters initialization.
+static const int hist_size[] = {Object::h_bins, Object::s_bins};
+//  0 (~0°red) to 180 (~360°red again)
+static const float hue_range[] = { 0, 250 };
+//  0 (black-gray-white) to 255 (pure spectrum color)
+static const float sat_range[] = { 0, 250 };
+//  combine the two previous information
+static const float* ranges[] = { hue_range, sat_range };
 
-  cvCvtPixToPlane(hsv, h, NULL, NULL, NULL);
-  cvCvtPixToPlane(hsv, NULL, s, NULL, NULL);
-
-  planes[0] = h;
-  planes[1] = s;
-}
 
 Object::Object()
   :  anchor_x(),
@@ -22,45 +19,110 @@ Object::Object()
      modelHistogram()
 {}
 
-cv::Ptr<IplImage>
-Object::computeMask(const IplImage& model)
+cv::Mat
+Object::computeMask(const cv::Mat& model)
 {
-  cv::Ptr<IplImage> gmodel = cvCreateImage(cvGetSize(&model), 8, 1);
-  cv::Ptr<IplImage> mask = cvCreateImage(cvGetSize(&model), 8, 1);
-  cvCvtColor(&model, gmodel, CV_BGR2GRAY);
-  cvThreshold(gmodel, mask, 5, 255, CV_THRESH_BINARY);
+  cv::Mat gmodel(model.size(), CV_8UC1);
+  cv::Mat mask(model.size(), CV_8UC1);
+
+  cv::cvtColor(model, gmodel, CV_BGR2GRAY);
+
+  cv::threshold(gmodel, mask, 5, 255, CV_THRESH_BINARY);
   return mask;
 }
 
 void
-Object::addView(const IplImage& model)
+Object::addView(const cv::Mat& model)
 {
-  // Histogram parameters initialization.
-  int hist_size[] = {h_bins, s_bins};
-  //  0 (~0°red) to 180 (~360°red again)
-  float hue_range[] = { 0, 250 };
-  //  0 (black-gray-white) to 255 (pure spectrum color)
-  float sat_range[] = { 0, 250 };
-  //  combine the two previous information
-  float* hist_ranges[] = { hue_range, sat_range };
-
   // Compute the mask.
-  cv::Ptr<IplImage> mask = computeMask(model);
-
-  // Separate hue and saturation channels.
-  HueSaturation hs(model);
-
-  // Create the histogram.
-  cv::Ptr<CvHistogram> objHist =
-    cvCreateHist(2, hist_size, CV_HIST_ARRAY, hist_ranges, 1);
+  cv::Mat mask = computeMask(model);
 
   // Compute the histogram.
-  cvCalcHist(hs.planes, objHist, 0, mask);
+  //  only use channels 0 and 1 (hue and saturation).
+  int channels[] = {0, 1};
+  cv::Mat hsv;
+  cv::MatND hist;
+  cv::cvtColor(model, hsv, CV_BGR2HSV);
+
+  calcHist(&hsv, 1, channels, mask,
+	   hist, 2, hist_size, ranges,
+	   true, false);
 
   // Normalize.
-  float max = 0.;
-  cvGetMinMaxHistValue(objHist, 0, &max, 0, 0);
-  cvConvertScale(objHist->bins, objHist->bins, max ? 255. / max : 0., 0);
 
-  this->modelHistogram.push_back(objHist);
+  double max = 0.;
+  cv::minMaxLoc(hist, 0, &max, 0, 0);
+
+  //  convert MatND into Mat, no copy is done, two types will be
+  //  merged soon enough.
+  cv::Mat hist_(hist);
+  cv::convertScaleAbs(hist_, hist_, max ? 255. / max : 0., 0);
+  this->modelHistogram.push_back(hist);
+}
+
+namespace
+{
+  /// \brief Reset search zone if it is incorrect.
+  void resetSearchZone(cv::Rect& rect, const cv::Mat& backProject)
+  {
+    if (rect.x < 0 || rect.y < 0)
+      {
+	rect.x = 0;
+	rect.y = 0;
+	rect.width = backProject.cols - 1;
+	rect.height = backProject.rows - 1;
+      }
+
+    if (rect.x + rect.width > backProject.cols - 1)
+      rect.width = backProject.cols - 1 - rect.x;
+    if (rect.y + rect.height > backProject.rows - 1)
+      rect.height = backProject.rows - 1 - rect.y;
+  }
+} // end of anonymous namespace.
+
+boost::optional<cv::RotatedRect>
+Object::track(const cv::Mat& image)
+{
+  boost::optional<cv::RotatedRect> result;
+
+  int nViews = modelHistogram.size();
+  if (!nViews)
+    return result;
+
+  // Convert to HSV.
+  cv::Mat hsv;
+  cv::cvtColor(image, hsv, CV_BGR2HSV);
+
+  // Compute back projection.
+  //  only use channels 0 and 1 (hue and saturation).
+  int channels[] = {0, 1};
+  cv::Mat backProject;
+  if (nViews == 1)
+    cv::calcBackProject(&hsv, 1, channels, modelHistogram[0], backProject,
+			ranges);
+  else
+    {
+      assert(0);
+
+      for(int nmodel = 0; nmodel < nViews; ++nmodel)
+	{
+	  cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
+			      backProject, ranges);
+	}
+    }
+
+  cv::threshold(backProject, backProject, 32, 0, CV_THRESH_TOZERO);
+  cv::medianBlur(backProject, backProject, 3);
+
+  resetSearchZone(searchWindow_, backProject);
+
+  cv::TermCriteria criteria =
+    cv::TermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
+
+  result = cv::CamShift(backProject, searchWindow_, criteria);
+  searchWindow_ = result->boundingRect();
+
+  if (!searchWindow_.height || !searchWindow_.width)
+    searchWindow_.x = searchWindow_.y = -1;
+  return result;
 }

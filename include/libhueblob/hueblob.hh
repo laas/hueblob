@@ -4,6 +4,7 @@
 # include <string>
 
 # include <boost/noncopyable.hpp>
+# include <opencv2/core/core.hpp>
 
 # include <ros/ros.h>
 
@@ -182,11 +183,11 @@ protected:
 
   // FIXME:
   IplImage* lastImage;
-  cv::Ptr<IplImage> trackImage;
-  cv::Ptr<IplImage> hstrackImage[2];
-  cv::Ptr<IplImage> trackBackProj;
-  cv::Ptr<IplImage> thrBackProj;
-  cv::Ptr<IplImage> blobTrackImage[3];
+  cv::Mat trackImage;
+  cv::Mat hstrackImage[2];
+  cv::Mat trackBackProj;
+  cv::Mat thrBackProj;
+  cv::Mat blobTrackImage[3];
 };
 
 #endif //! HUEBLOB_HUEBLOB_H

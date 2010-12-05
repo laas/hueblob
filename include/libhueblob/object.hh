@@ -1,31 +1,8 @@
 #ifndef HUEBLOB_OBJECT_HH
 # define HUEBLOB_OBJECT_HH
 # include <vector>
-
-# include <opencv/cv.h>
-
-/// \brief Define a hue/saturation image pair.
-struct HueSaturation
-{
-  /// \brief Copy hue and saturation channels
-  ///        from the source image into two
-  ///         separate images.
-  ///
-  /// \param image source image
-  HueSaturation(const IplImage& image);
-
-  /// \brief Hue component.
-  cv::Ptr<IplImage> h;
-  /// \brief Saturation component.
-  cv::Ptr<IplImage> s;
-
-  /// \brief C array of OpenCV images pointing to hue and saturation
-  /// images (in this order).
-  ///
-  /// This structure is required by OpenCV histogram related
-  /// functions.
-  IplImage* planes[2];
-};
+# include <boost/optional.hpp>
+# include <opencv2/core/core.hpp>
 
 /// \brief Define an object of the object database.
 ///
@@ -47,7 +24,14 @@ struct Object {
   /// the view.
   ///
   /// \param view reference to the view
-  void addView(const IplImage& view);
+  void addView(const cv::Mat& view);
+
+  /// \brief Track the object in the current image.
+  ///
+  /// \param image track in which the object will be tracked.
+  /// \return a rotated rectangle if the object has been successfully tracked,
+  ///         otherwise nothing.
+  boost::optional<cv::RotatedRect> track(const cv::Mat& image);
 
 
   /// \brief Compute image mask used for histogram computation.
@@ -57,7 +41,7 @@ struct Object {
   /// histogram computation step.
   ///
   /// \param view reference to the view
-  cv::Ptr<IplImage> computeMask(const IplImage& model);
+  cv::Mat computeMask(const cv::Mat& model);
 
   /// \name Anchor
   /// \{
@@ -67,7 +51,13 @@ struct Object {
   /// \}
 
   /// \brief Contains all the histograms associated with this object.
-  std::vector<cv::Ptr<CvHistogram> > modelHistogram;
+  std::vector<cv::MatND> modelHistogram;
+
+  /// \brief Object search window.
+  ///
+  /// Where the object has been seen the last time it has been
+  /// successfully tracked.
+  cv::Rect searchWindow_;
 };
 
 #endif //! HUEBLOB_OBJECT_HH

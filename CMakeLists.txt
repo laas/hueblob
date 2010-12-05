@@ -22,7 +22,7 @@ rosbuild_gensrv()
 # Library.
 rosbuild_add_library(hueblob
   src/libhueblob/object.cpp include/libhueblob/object.hh
-  src/libhueblob/hueblob.cpp include/libhueblob/hueblob.h)
+  src/libhueblob/hueblob.cpp include/libhueblob/hueblob.hh)
 
 # Nodes.
 #  hueblob node.

@@ -7,9 +7,8 @@
 #include <sensor_msgs/Image.h>
 #include <hueblob/Blob.h>
 #include <hueblob/AddObject.h>
-#include <cv.h>
 
-#include "libhueblob/hueblob.h"
+#include "libhueblob/hueblob.hh"
 
 void nullDeleter(void*) {}
 
@@ -145,20 +144,23 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 			   hueblob::AddObject::Response& response)
 {
   response.status = 0;
-  IplImage* model;
 
   // Convert ROS image to OpenCV.
+  IplImage* model_ = 0;
+  sensor_msgs::CvBridge bridge;
   try
     {
       boost::shared_ptr<sensor_msgs::Image> image_ptr
 	(&request.image, nullDeleter);
-      model = bridge_.imgMsgToCv(image_ptr,"rgb8");
+      model_ = bridge.imgMsgToCv(image_ptr,"rgb8");
     }
   catch(const sensor_msgs::CvBridgeException& error)
     {
       ROS_ERROR("failed to convert image");
       return false;
     }
+  cv::Mat model(model_, false);
+
 
   // Get reference on the object.
   Object& object = objects_[request.name];
@@ -174,8 +176,8 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   object.anchor_y = request.anchor.y;
   object.anchor_z = request.anchor.z;
 
-  /// Add the view to the object.
-  object.addView(*model);
+  // Add the view to the object.
+  object.addView(model);
 
   return true;
 }
@@ -205,34 +207,6 @@ HueBlob::TrackObjectCallback(hueblob::TrackObject::Request& request,
   return true;
 }
 
-namespace
-{
-  /* reset search zone if it is incorrect */
-  void resetSearchZone(hueblob::Box& blob, const cv::Ptr<IplImage>& thrBackProj)
-  {
-    if (blob.x < 0 || blob.y < 0)
-      {
-	blob.x = 0;
-	blob.y = 0;
-	blob.width = thrBackProj->width-1;
-	blob.height = thrBackProj->height-1;
-      }
-
-    if (blob.x + blob.width > thrBackProj->width - 1)
-      blob.width = thrBackProj->width - 1 - blob.x;
-    if (blob.y + blob.height > thrBackProj->height - 1)
-      blob.height = thrBackProj->height - 1 - blob.y;
-  }
-} // end of anonymous namespace.
-
-
-#define RESIZE_IF_NEEDED(IMG, COMPONENTS)                               \
-  do {                                                                  \
-    if (!IMG                                                            \
-        || IMG->width != lastImage->width                               \
-        || IMG->height != lastImage->height)                            \
-      IMG = cvCreateImage(cvGetSize(lastImage), 8, COMPONENTS);         \
-  } while(0)
 
 hueblob::Blob
 HueBlob::trackBlob(const std::string& name)
@@ -245,107 +219,42 @@ HueBlob::trackBlob(const std::string& name)
   if (!lastImage || !lastImage->width || !lastImage->height)
     return blob_;
 
-  RESIZE_IF_NEEDED(blobTrackImage[0], 3);
-  RESIZE_IF_NEEDED(blobTrackImage[1], 1);
-  RESIZE_IF_NEEDED(blobTrackImage[2], 1);
-  RESIZE_IF_NEEDED(thrBackProj, 3);
-  RESIZE_IF_NEEDED(hstrackImage[0], 1);
-  RESIZE_IF_NEEDED(hstrackImage[1], 1);
-
-  cvCvtColor(lastImage, blobTrackImage[0], CV_BGR2HSV);
-
-  for(unsigned i=1; i < 3; ++i)
-    cvCvtColor(lastImage, blobTrackImage[i], CV_BGR2GRAY);
-
-  // Blob detection.
-  Object& object = objects_[name];
-  if (object.modelHistogram.empty())
+  // Realize 2d tracking in the image.
+  cv::Mat image(lastImage, false);
+  boost::optional<cv::RotatedRect> rrect = objects_[name].track(image);
+  if (!rrect)
     {
-      ROS_ERROR("Fail to track object as no view is available.");
+      ROS_WARN("failed to track object");
       return blob_;
     }
 
-  resetSearchZone(blob, thrBackProj);
-
-  // convert source to HSV
-  cvCvtPixToPlane(blobTrackImage[0], hstrackImage[0], NULL, NULL, NULL);
-  cvCvtPixToPlane(blobTrackImage[0], NULL, hstrackImage[1], NULL, NULL);
-
-  // iterate over all templates
-  IplImage* hstrackImage_[2] = { hstrackImage[0], hstrackImage[1] };
-
-  int nViews = object.modelHistogram.size();
-  if (nViews <= 1)
-    cvCalcBackProject(hstrackImage_, thrBackProj, object.modelHistogram[0]);
-  else
-    {
-      memset(thrBackProj->imageData, 0, thrBackProj->imageSize);
-      for(int nmodel = 0; nmodel < nViews; ++nmodel)
-	{
-	  cvCalcBackProject(hstrackImage_, trackBackProj,
-			    object.modelHistogram[nmodel]);
-
-	  unsigned char* s = (unsigned char *)trackBackProj->imageData;
-	  unsigned char* d = (unsigned char *)thrBackProj->imageData;
-	  for(int i = 0; i < thrBackProj->imageSize; ++i)
-	    {
-	      int p = *s + *d;
-	      if (p > 255)
-		p = 255;
-	      *d = p;
-	      s++; d++;
-	    }
-	}
-
-      cvThreshold(thrBackProj, trackBackProj, 32, 0, CV_THRESH_TOZERO);
-      cvSmooth(trackBackProj, thrBackProj, CV_MEDIAN, 3);
-
-      CvBox2D box;
-      CvConnectedComp components;
-      CvTermCriteria criteria =
-	cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
-      cvCamShift(thrBackProj,
-		 cvRect(blob.x, blob.y, blob.width, blob.height),
-		 criteria, &components, &box);
-
-      if (!box.size.height || !box.size.width)
-	{
-	  blob.x = blob.y = -1;
-	  ROS_WARN("cannot find blob");
-          return blob_;
-	}
-
-      blob.x = components.rect.x;
-      blob.y = components.rect.y;
-      blob.width = components.rect.width;
-      blob.height = components.rect.height;
-    }
-
-
-  blob_.position.transform.translation.x = blob.x;
-  blob_.position.transform.translation.y = blob.y;
-  blob_.position.transform.translation.z = blob.width;
-  return blob_;
+  cv::Rect rect = rrect->boundingRect();
+  blob_.position.transform.translation.x = rect.x;
+  blob_.position.transform.translation.y = rect.y;
+  blob_.position.transform.translation.z = rect.width;
 
   //FIXME: get depth information from disparity.
   //FIXME: compute average.
+  return blob_;
 }
 
 void
 HueBlob::checkInputsSynchronized()
 {
   int threshold = 3 * all_received_;
-  if (left_received_ > threshold || right_received_ > threshold || disp_received_ > threshold)
+  if (left_received_ > threshold
+      || right_received_ > threshold || disp_received_ > threshold)
     {
-      ROS_WARN("[hueblob] Low number of synchronized left/right/disparity triplets received.\n"
-	       "Left images received: %d\n"
-	       "Right images received: %d\n"
-	       "Disparity images received: %d\n"
-	       "Synchronized triplets: %d\n"
-	       "Possible issues:\n"
-	       "\t* stereo_image_proc is not running.\n"
-	       "\t* The cameras are not synchronized.\n"
-	       "\t* The network is too slow. One or more images are dropped from each triplet.",
-	       left_received_, right_received_, disp_received_, all_received_);
+      ROS_WARN
+	("[hueblob] Low number of synchronized left/right/disparity triplets received.\n"
+	 "Left images received: %d\n"
+	 "Right images received: %d\n"
+	 "Disparity images received: %d\n"
+	 "Synchronized triplets: %d\n"
+	 "Possible issues:\n"
+	 "\t* stereo_image_proc is not running.\n"
+	 "\t* The cameras are not synchronized.\n"
+	 "\t* The network is too slow. One or more images are dropped from each triplet.",
+	 left_received_, right_received_, disp_received_, all_received_);
     }
 }
