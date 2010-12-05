@@ -50,9 +50,11 @@ struct Object {
   void addView(const IplImage& view);
 
 
-  /// \brief Compute image mask.
+  /// \brief Compute image mask used for histogram computation.
   ///
-  /// Used internally by addView.
+  /// Used internally by addView. The non zero values of this image
+  /// indicates pixel to will be taken into account during the
+  /// histogram computation step.
   ///
   /// \param view reference to the view
   cv::Ptr<IplImage> computeMask(const IplImage& model);
