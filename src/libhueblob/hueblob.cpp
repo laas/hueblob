@@ -9,7 +9,7 @@
 #include <hueblob/AddObject.h>
 #include <cv.h>
 
-#include "hueblob.h"
+#include "libhueblob/hueblob.h"
 
 void nullDeleter(void*) {}
 

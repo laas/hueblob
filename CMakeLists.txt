@@ -17,20 +17,22 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 rosbuild_genmsg()
-#uncomment if you have defined services
 rosbuild_gensrv()
 
-#common commands for building c++ executables and libraries
-#rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
-#target_link_libraries(${PROJECT_NAME} another_library)
-#rosbuild_add_boost_directories()
-#rosbuild_link_boost(${PROJECT_NAME} thread)
+# Library.
+rosbuild_add_library(hueblob
+  src/libhueblob/hueblob.cpp include/libhueblob/hueblob.h)
 
-rosbuild_add_executable(hueblob_node src/hueblob_node.cpp src/hueblob.cpp)
+# Nodes.
+#  hueblob node.
+rosbuild_add_executable(hueblob_node src/nodes/hueblob_node.cpp)
+target_link_libraries(hueblob_node hueblob)
 
+# fake_camera_synchronizer_node node.
 rosbuild_add_executable(
   fake_camera_synchronizer_node
-  src/fake_camera_synchronizer_node.cpp)
+  src/nodes/fake_camera_synchronizer_node.cpp)
+
 
 # Download test bag file if required.
 rosbuild_download_test_data(
