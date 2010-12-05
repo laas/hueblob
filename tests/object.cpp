@@ -46,6 +46,16 @@ TEST(TestSuite, simple)
   EXPECT_EQ(object.modelHistogram.size(), 0);
 }
 
+TEST(TestSuite, compute_mask)
+{
+  Object object;
+  cv::Ptr<IplImage> img = cvLoadImage("./data/door.png");
+  cv::Ptr<IplImage> mask = object.computeMask(*img);
+
+  if(!cvSaveImage("mask.png", mask))
+    std::cerr << "Failed to save image.";
+}
+
 TEST(TestSuite, add_view)
 {
   Object object;

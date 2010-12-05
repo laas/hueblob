@@ -4,6 +4,29 @@
 
 # include <opencv/cv.h>
 
+/// \brief Define a hue/saturation image pair.
+struct HueSaturation
+{
+  /// \brief Copy hue and saturation channels
+  ///        from the source image into two
+  ///         separate images.
+  ///
+  /// \param image source image
+  HueSaturation(const IplImage& image);
+
+  /// \brief Hue component.
+  cv::Ptr<IplImage> h;
+  /// \brief Saturation component.
+  cv::Ptr<IplImage> s;
+
+  /// \brief C array of OpenCV images pointing to hue and saturation
+  /// images (in this order).
+  ///
+  /// This structure is required by OpenCV histogram related
+  /// functions.
+  IplImage* planes[2];
+};
+
 /// \brief Define an object of the object database.
 ///
 /// An object is recognized by storing its histogram
@@ -14,7 +37,9 @@
 struct Object {
   static const int h_bins = 25;
   static const int s_bins = 25;
+
   explicit Object();
+
 
   /// \brief Build the view histogram and append it to modelHistogram.
   ///
@@ -23,6 +48,14 @@ struct Object {
   ///
   /// \param view reference to the view
   void addView(const IplImage& view);
+
+
+  /// \brief Compute image mask.
+  ///
+  /// Used internally by addView.
+  ///
+  /// \param view reference to the view
+  cv::Ptr<IplImage> computeMask(const IplImage& model);
 
   /// \name Anchor
   /// \{
