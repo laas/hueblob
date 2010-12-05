@@ -127,8 +127,6 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
     nh_.createWallTimer(ros::WallDuration(30.0),
 			boost::bind(&HueBlob::checkInputsSynchronized, this));
 
-  //FIXME: add callback checking that images are received.
-
   ROS_INFO("Subscribing to:\n\t* %s\n\t* %s\n\t* %s",
 	   left_topic.c_str(), right_topic.c_str(),
 	   disparity_topic.c_str());
