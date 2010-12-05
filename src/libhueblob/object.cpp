@@ -16,7 +16,8 @@ Object::Object()
   :  anchor_x(),
      anchor_y(),
      anchor_z(),
-     modelHistogram()
+     modelHistogram(),
+     searchWindow_(-1, -1, -1, -1)
 {}
 
 cv::Mat

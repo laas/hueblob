@@ -37,12 +37,8 @@ HueBlob::HueBlob()
     right_received_(),
     disp_received_(),
     all_received_(),
-    lastImage(),
-    trackImage(),
-    hstrackImage(),
-    trackBackProj(),
-    thrBackProj(),
-    blobTrackImage()
+    leftImage_(),
+    disparity_()
 {
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
@@ -134,9 +130,10 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 void
 HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::ImageConstPtr& right,
-		       const stereo_msgs::DisparityImageConstPtr& disparity_msg)
+		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
-  lastImage = bridge_.imgMsgToCv(left,"bgr8");
+  leftImage_ = left;
+  disparity_ = disparity;
 }
 
 bool
@@ -216,11 +213,11 @@ HueBlob::trackBlob(const std::string& name)
   blob_.name = name;
 
   // Image acquisition.
-  if (!lastImage || !lastImage->width || !lastImage->height)
+  if (!leftImage_)
     return blob_;
 
   // Realize 2d tracking in the image.
-  cv::Mat image(lastImage, false);
+  cv::Mat image(bridge_.imgMsgToCv(leftImage_, "bgr8"), false);
   boost::optional<cv::RotatedRect> rrect = objects_[name].track(image);
   if (!rrect)
     {

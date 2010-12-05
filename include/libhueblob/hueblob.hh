@@ -181,13 +181,10 @@ protected:
   /// \brief How many synchronized images received so far?
   int all_received_;
 
-  // FIXME:
-  IplImage* lastImage;
-  cv::Mat trackImage;
-  cv::Mat hstrackImage[2];
-  cv::Mat trackBackProj;
-  cv::Mat thrBackProj;
-  cv::Mat blobTrackImage[3];
+  /// \brief Last received image for the left camera.
+  sensor_msgs::ImageConstPtr leftImage_;
+  /// \brief Last received disparity.
+  stereo_msgs::DisparityImageConstPtr disparity_;
 };
 
 #endif //! HUEBLOB_HUEBLOB_H
