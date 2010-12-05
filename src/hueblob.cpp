@@ -138,7 +138,6 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 			   hueblob::AddObject::Response& response)
 {
   response.status = 0;
-  CvHistogram** objHist;
   cv::Ptr<IplImage> gmodel;
   cv::Ptr<IplImage> mask;
   cv::Ptr<IplImage> hsv;
@@ -181,12 +180,6 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
   ++object.nViews;
 
-  //FIXME: use a C++ container instead.
-  object.modelHistogram =
-    (CvHistogram **)realloc(object.modelHistogram,
-			    object.nViews * sizeof(*object.modelHistogram));
-  objHist = &object.modelHistogram[object.nViews-1];
-
   // compute mask
   gmodel = cvCreateImage(cvGetSize(model), 8, 1);
   mask = cvCreateImage(cvGetSize(model), 8, 1);
@@ -202,13 +195,16 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   cvCvtPixToPlane(hsv, hs_planes[0], NULL, NULL, NULL);
   cvCvtPixToPlane(hsv, NULL, hs_planes[1], NULL, NULL);
 
-  *objHist = cvCreateHist(2, hist_size, CV_HIST_ARRAY, hist_ranges, 1);
+  cv::Ptr<CvHistogram> objHist =
+    cvCreateHist(2, hist_size, CV_HIST_ARRAY, hist_ranges, 1);
 
   // compute histogram
   IplImage* hs_planes_[] = {hs_planes[0], hs_planes[1]};
-  cvCalcHist(hs_planes_, *objHist, 0, mask);
-  cvGetMinMaxHistValue(*objHist, 0, &max, 0, 0 );
-  cvConvertScale((*objHist)->bins, (*objHist)->bins, max?255./max:0., 0);
+  cvCalcHist(hs_planes_, objHist, 0, mask);
+  cvGetMinMaxHistValue(objHist, 0, &max, 0, 0 );
+  cvConvertScale(objHist->bins, objHist->bins, max ? 255. / max : 0., 0);
+
+  object.modelHistogram.push_back(objHist);
 
   return true;
 }

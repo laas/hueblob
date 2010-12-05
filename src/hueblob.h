@@ -38,7 +38,7 @@ struct Object {
   double anchor_z;
 
   int nViews;
-  CvHistogram** modelHistogram;
+  std::vector<cv::Ptr<CvHistogram> > modelHistogram;
 };
 
 /// \brief Main class of the HueBlob node.
