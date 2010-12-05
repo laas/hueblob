@@ -61,15 +61,24 @@ HueBlob::~HueBlob()
 void
 HueBlob::spin()
 {
+  typedef std::pair<const std::string&, const Object&> iterator_t;
+
   ros::Rate loop_rate(10);
 
   ROS_DEBUG("Entering the node main loop.");
   while (ros::ok())
     {
-      hueblob::Blob blob = trackBlob("FIXME");
-
       hueblob::Blobs blobs;
-      blobs.blobs.push_back(blob);
+
+      //FIXME: currently iterate on all blobs.
+      // Should we prune untrackable blobs?
+      // Should we provide a way to disable tracking
+      //  for some objects?
+      BOOST_FOREACH(iterator_t it, objects_)
+	{
+	  hueblob::Blob blob = trackBlob(it.first);
+	  blobs.blobs.push_back(blob);
+	}
       blobs_pub_.publish(blobs);
 
       ros::spinOnce();
