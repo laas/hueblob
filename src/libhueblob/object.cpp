@@ -10,7 +10,7 @@ Object::Object()
 void
 Object::addView(const IplImage& model)
 {
-  int hist_size[] = {25, 25};
+  int hist_size[] = {h_bins, s_bins};
   // 0 (~0°red) to 180 (~360°red again)
   float hue_range[] = { 0, 250 };
   // 0 (black-gray-white) to 255 (pure spectrum color)

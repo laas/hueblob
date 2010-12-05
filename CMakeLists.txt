@@ -34,6 +34,9 @@ rosbuild_add_executable(
   fake_camera_synchronizer_node
   src/nodes/fake_camera_synchronizer_node.cpp)
 
+# Tests
+rosbuild_add_gtest(object tests/object.cpp)
+target_link_libraries(object hueblob)
 
 # Download test bag file if required.
 rosbuild_download_test_data(

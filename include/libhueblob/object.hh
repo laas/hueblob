@@ -12,6 +12,8 @@
 /// A 3d offset called anchor is also provided to tune
 /// the position of the 3d point associated with an object.
 struct Object {
+  static const int h_bins = 25;
+  static const int s_bins = 25;
   explicit Object();
 
   /// \brief Build the view histogram and append it to modelHistogram.
