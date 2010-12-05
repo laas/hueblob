@@ -11,13 +11,15 @@
 #include "libhueblob/hueblob.hh"
 
 void nullDeleter(void*) {}
+void nullDeleterConst(const void*) {}
 
 HueBlob::HueBlob()
   : nh_("hueblob"),
     it_(nh_),
     stereo_topic_prefix_ (),
     threshold_(),
-    bridge_(),
+    bridgeLeft_(),
+    bridgeDisparity_(),
     left_sub_(),
     right_sub_(),
     disparity_sub_(),
@@ -204,6 +206,49 @@ HueBlob::TrackObjectCallback(hueblob::TrackObject::Request& request,
   return true;
 }
 
+namespace
+{
+  //FIXME: this is not as good as the original hueblob...
+  void get3dBox(const cv::Mat& image,
+		const cv::Mat& disparity,
+		const cv::Rect& rect,
+		const double f,
+		const double T,
+		cv::Point3d& min,
+		cv::Point3d& max,
+		cv::Point3d& center)
+  {
+    for (int y = rect.y; y < std::min(image.cols, rect.height); ++y)
+      for (int x = rect.x; x < std::min(image.rows, rect.width); ++x)
+	{
+	  unsigned char d = disparity.at<unsigned char>(y, x);
+
+	  //FIXME: check transformation.
+	  double X = x;
+	  double Y = y;
+	  double Z = f * T / d;
+	  cv::Point3d p(X, Y, Z);
+
+	  // Update extrema.
+	  if (p.x < min.x)
+	    min.x = p.x;
+	  if (p.y < min.y)
+	    min.y = p.y;
+	  if (p.z < min.z)
+	    min.z = p.z;
+
+	  if (p.x > max.x)
+	    max.x = p.x;
+	  if (p.y > max.y)
+	    max.y = p.y;
+	  if (p.z > max.z)
+	    max.z = p.z;
+	}
+    center.x = std::fabs(max.x - min.x) / 2.;
+    center.y = std::fabs(max.y - min.y) / 2.;
+    center.z = std::fabs(max.z - min.z) / 2.;
+  }
+} // end of anonymous namespace.
 
 hueblob::Blob
 HueBlob::trackBlob(const std::string& name)
@@ -213,12 +258,13 @@ HueBlob::trackBlob(const std::string& name)
   blob_.name = name;
 
   // Image acquisition.
-  if (!leftImage_)
+  if (!leftImage_ || !disparity_)
     return blob_;
 
   // Realize 2d tracking in the image.
-  cv::Mat image(bridge_.imgMsgToCv(leftImage_, "bgr8"), false);
-  boost::optional<cv::RotatedRect> rrect = objects_[name].track(image);
+  Object& object = objects_[name];
+  cv::Mat image(bridgeLeft_.imgMsgToCv(leftImage_, "bgr8"), false);
+  boost::optional<cv::RotatedRect> rrect = object.track(image);
   if (!rrect)
     {
       ROS_WARN("failed to track object");
@@ -226,12 +272,34 @@ HueBlob::trackBlob(const std::string& name)
     }
 
   cv::Rect rect = rrect->boundingRect();
-  blob_.position.transform.translation.x = rect.x;
-  blob_.position.transform.translation.y = rect.y;
-  blob_.position.transform.translation.z = rect.width;
 
-  //FIXME: get depth information from disparity.
-  //FIXME: compute average.
+  // Convert disparity to OpenCV image.
+  boost::shared_ptr<const sensor_msgs::Image> imagePtr
+    (&disparity_->image, nullDeleterConst);
+  cv::Mat disparity(bridgeDisparity_.imgMsgToCv(imagePtr, "mono8"), false);
+
+  // Compute 3d box.
+  cv::Point3d min;
+  cv::Point3d max;
+  cv::Point3d center;
+  get3dBox(image, disparity, rect,
+	   disparity_->f, disparity_->T, min, max, center);
+
+  center.x += object.anchor_x;
+  center.y += object.anchor_y;
+  center.z += object.anchor_z;
+
+  // Fill blob.
+  blob_.position.header = leftImage_->header;
+  blob_.position.child_frame_id = "/hueblob_" + name;
+  blob_.position.transform.translation.x = center.x;
+  blob_.position.transform.translation.y = center.y;
+  blob_.position.transform.translation.z = center.z;
+  blob_.position.transform.rotation.x = 0.;
+  blob_.position.transform.rotation.y = 0.;
+  blob_.position.transform.rotation.z = 0.;
+  blob_.position.transform.rotation.w = 0.;
+
   return blob_;
 }
 
@@ -243,7 +311,8 @@ HueBlob::checkInputsSynchronized()
       || right_received_ > threshold || disp_received_ > threshold)
     {
       ROS_WARN
-	("[hueblob] Low number of synchronized left/right/disparity triplets received.\n"
+	("[hueblob] Low number of synchronized left/right/disparity triplets"
+	 " received.\n"
 	 "Left images received: %d\n"
 	 "Right images received: %d\n"
 	 "Disparity images received: %d\n"
@@ -251,7 +320,8 @@ HueBlob::checkInputsSynchronized()
 	 "Possible issues:\n"
 	 "\t* stereo_image_proc is not running.\n"
 	 "\t* The cameras are not synchronized.\n"
-	 "\t* The network is too slow. One or more images are dropped from each triplet.",
+	 "\t* The network is too slow. One or more images are dropped from each"
+	 "triplet.",
 	 left_received_, right_received_, disp_received_, all_received_);
     }
 }

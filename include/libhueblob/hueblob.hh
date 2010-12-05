@@ -8,19 +8,21 @@
 
 # include <ros/ros.h>
 
+// OpenCV bridge (OpenCV<->ROS conversion).
 # include <cv_bridge/CvBridge.h>
+
+// Image transport.
 # include <image_transport/image_transport.h>
 # include <image_transport/subscriber_filter.h>
+
+// Message filters.
 # include <message_filters/subscriber.h>
 # include <message_filters/sync_policies/exact_time.h>
 # include <message_filters/synchronizer.h>
 
+// Messages.
 # include <sensor_msgs/Image.h>
 # include <stereo_msgs/DisparityImage.h>
-
-# include "libhueblob/object.hh"
-
-// Messages.
 # include "hueblob/Blob.h"
 # include "hueblob/Blobs.h"
 
@@ -29,6 +31,10 @@
 # include "hueblob/ListObject.h"
 # include "hueblob/RmObject.h"
 # include "hueblob/TrackObject.h"
+
+
+# include "libhueblob/object.hh"
+
 
 
 /// \brief Main class of the HueBlob node.
@@ -129,8 +135,10 @@ protected:
 
   /// \}
 
-  /// \brief OpenCV bridge used for ROS<->OpenCv conversions.
-  sensor_msgs::CvBridge bridge_;
+  /// \brief left image CvBridge.
+  sensor_msgs::CvBridge bridgeLeft_;
+  /// \brief disparity CvBridge.
+  sensor_msgs::CvBridge bridgeDisparity_;
 
 
   /// \brief Left image subscriber.

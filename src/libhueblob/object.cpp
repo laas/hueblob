@@ -134,7 +134,7 @@ Object::track(const cv::Mat& image)
   result = cv::CamShift(backProject, searchWindow_, criteria);
   searchWindow_ = result->boundingRect();
 
-  if (!searchWindow_.height || !searchWindow_.width)
+  if (searchWindow_.height <= 0 || searchWindow_.width <= 0)
     searchWindow_.x = searchWindow_.y = -1;
   return result;
 }
