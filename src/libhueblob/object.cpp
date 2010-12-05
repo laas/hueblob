@@ -12,7 +12,7 @@ HueSaturation::HueSaturation(const IplImage& image)
   cvCvtPixToPlane(hsv, NULL, s, NULL, NULL);
 
   planes[0] = h;
-  planes[1] = h;
+  planes[1] = s;
 }
 
 Object::Object()
