@@ -53,10 +53,20 @@ TEST(TestSuite, compute_mask)
     std::cerr << "Failed to save image.";
 }
 
+TEST(TestSuite, compute_mask)
+{
+  Object object;
+  cv::Mat img = cv::imread("./data/door.png");
+  cv::Mat mask = object.computeMask(img);
+
+  if(!cv::imwrite("mask.png", mask))
+    std::cerr << "Failed to save image.";
+}
+
 TEST(TestSuite, add_view)
 {
   Object object;
-  cv::Mat img = cvLoadImage("./data/door.png");
+  cv::Mat img = cvLoadImage("./data/models/door.png");
   object.addView(img);
 
   EXPECT_EQ(object.modelHistogram.size(), 1u);
@@ -67,8 +77,8 @@ TEST(TestSuite, add_view)
 TEST(TestSuite, track)
 {
   Object object;
-  cv::Mat view = cvLoadImage("./data/door.png");
-  cv::Mat image = cvLoadImage("./data/door-frame.png");
+  cv::Mat view = cvLoadImage("./data/models/door.png");
+  cv::Mat image = cvLoadImage("./data/frames/door-frame.png");
   object.addView(view);
 
   EXPECT_EQ(object.modelHistogram.size(), 1u);
