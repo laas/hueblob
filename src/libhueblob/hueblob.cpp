@@ -285,13 +285,19 @@ namespace
 hueblob::Blob
 HueBlob::trackBlob(const std::string& name)
 {
-  hueblob::Box blob;
-  hueblob::Blob blob_;
-  blob_.name = name;
+  hueblob::Blob blob;
+
+  // Fill blob header.
+  blob.name = name;
+  blob.position.header = leftImage_->header;
+  blob.position.child_frame_id = "/hueblob_" + name;
+  blob.boundingbox_2d.resize(4);
+  for (unsigned i = 0; i < 4; ++i)
+    blob.boundingbox_2d[i] = 0.;
 
   // Image acquisition.
   if (!leftImage_ || !disparity_)
-    return blob_;
+    return blob;
 
   // Realize 2d tracking in the image.
   Object& object = objects_[name];
@@ -299,15 +305,22 @@ HueBlob::trackBlob(const std::string& name)
   boost::optional<cv::RotatedRect> rrect = object.track(image);
   if (!rrect)
     {
-      ROS_WARN("failed to track object");
-      return blob_;
+      ROS_WARN_THROTTLE(20, "failed to track object");
+      return blob;
     }
 
   cv::Rect rect = rrect->boundingRect();
+
+  blob.boundingbox_2d[0] = rect.x;
+  blob.boundingbox_2d[1] = rect.y;
+  blob.boundingbox_2d[2] = rect.width;
+  blob.boundingbox_2d[3] = rect.height;
+
   if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0)
     {
-      ROS_WARN("failed to track object (invalid tracking window)");
-      return blob_;
+      ROS_WARN_THROTTLE
+        (20, "failed to track object (invalid tracking window)");
+      return blob;
     }
 
   // Convert disparity to OpenCV image.
@@ -335,17 +348,14 @@ HueBlob::trackBlob(const std::string& name)
   center.z += object.anchor_z;
 
   // Fill blob.
-  blob_.position.header = leftImage_->header;
-  blob_.position.child_frame_id = "/hueblob_" + name;
-  blob_.position.transform.translation.x = center.x;
-  blob_.position.transform.translation.y = center.y;
-  blob_.position.transform.translation.z = center.z;
-  blob_.position.transform.rotation.x = 0.;
-  blob_.position.transform.rotation.y = 0.;
-  blob_.position.transform.rotation.z = 0.;
-  blob_.position.transform.rotation.w = 0.;
-
-  return blob_;
+  blob.position.transform.translation.x = center.x;
+  blob.position.transform.translation.y = center.y;
+  blob.position.transform.translation.z = center.z;
+  blob.position.transform.rotation.x = 0.;
+  blob.position.transform.rotation.y = 0.;
+  blob.position.transform.rotation.z = 0.;
+  blob.position.transform.rotation.w = 0.;
+  return blob;
 }
 
 void
