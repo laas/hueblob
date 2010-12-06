@@ -31,7 +31,6 @@ Object::computeMask(const cv::Mat& model)
   cv::threshold(gmodel, mask, 5, 255, CV_THRESH_BINARY);
   return mask;
 }
-
 void
 Object::addView(const cv::Mat& model)
 {
@@ -98,30 +97,29 @@ Object::track(const cv::Mat& image)
   //  only use channels 0 and 1 (hue and saturation).
   int channels[] = {0, 1};
   cv::Mat backProject;
-  if (nViews == 1)
-    cv::calcBackProject(&hsv, 1, channels, modelHistogram[0], backProject,
-			ranges);
-  else
-    for(int nmodel = 0; nmodel < nViews; ++nmodel)
-      {
-	cv::Mat backProjectTmp;
-	cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
-			    backProjectTmp, ranges);
+  cv::calcBackProject(&hsv, 1, channels, modelHistogram[0], backProject,
+		      ranges);
 
-	// Merge back projections while taking care of overflows.
-	for (int i = 0 ; i < backProject.rows; ++i)
-	  for (int j = 0 ; j < backProject.cols; ++j)
-	    {
-	      int v =
-		backProject.at<unsigned char>(i, j)
-		+ backProjectTmp.at<unsigned char>(i, j);
-	      if (v <= 0)
-		v = 0;
-	      else if (v >= 255)
-		v = 255;
-	      backProject = v;
-	    }
-      }
+  for(int nmodel = 1; nmodel < nViews; ++nmodel)
+    {
+      cv::Mat backProjectTmp;
+      cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
+			  backProjectTmp, ranges);
+
+      // Merge back projections while taking care of overflows.
+      for (int i = 0 ; i < backProject.rows; ++i)
+	for (int j = 0 ; j < backProject.cols; ++j)
+	  {
+	    int v =
+	      backProject.at<unsigned char>(i, j)
+	      + backProjectTmp.at<unsigned char>(i, j);
+	    if (v <= 0)
+	      v = 0;
+	    else if (v >= 255)
+	      v = 255;
+	    backProject.at<unsigned char>(i, j) = v;
+	  }
+    }
 
   cv::threshold(backProject, backProject, 32, 0, CV_THRESH_TOZERO);
   cv::medianBlur(backProject, backProject, 3);
