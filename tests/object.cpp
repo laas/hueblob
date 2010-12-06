@@ -53,16 +53,6 @@ TEST(TestSuite, compute_mask)
     std::cerr << "Failed to save image.";
 }
 
-TEST(TestSuite, compute_mask)
-{
-  Object object;
-  cv::Mat img = cv::imread("./data/door.png");
-  cv::Mat mask = object.computeMask(img);
-
-  if(!cv::imwrite("mask.png", mask))
-    std::cerr << "Failed to save image.";
-}
-
 TEST(TestSuite, add_view)
 {
   Object object;
