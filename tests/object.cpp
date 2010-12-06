@@ -5,17 +5,25 @@
 #include <opencv2/highgui/highgui.hpp>
 
 #include "libhueblob/object.hh"
+#include <vector>
 
-void trackObject(const std::string& viewFilename,
+void trackObject(std::vector<std::string> viewFilenames,
 		 const std::string& frameFilename)
 {
   Object object;
-  cv::Mat view = cv::imread(viewFilename + ".png");
+
+  for (  std::vector<std::string>::iterator iter =
+           viewFilenames.begin();
+         iter != viewFilenames.end(); iter++ )
+    {
+      std::string viewFilename = *iter;
+      cv::Mat view = cv::imread(viewFilename + ".png");
+      object.addView(view);
+    }
+
+  EXPECT_EQ(object.modelHistogram.size(), viewFilenames.size());
+
   cv::Mat image = cv::imread(frameFilename + ".png");
-  object.addView(view);
-
-  EXPECT_EQ(object.modelHistogram.size(), 1u);
-
   boost::optional<cv::RotatedRect> rrect = object.track(image);
 
   // Check that tracking succeed.
@@ -111,7 +119,7 @@ TEST(TestSuite, simple)
 // Mask tests.
 TEST(TestSuite, compute_mask_ball_rose)
 {
-  computeMask("./data/frames/ball-rose-model");
+  computeMask("./data/models/ball-rose");
 }
 
 TEST(TestSuite, compute_mask_ball_orange)
@@ -125,7 +133,6 @@ TEST(TestSuite, compute_mask_door)
   computeMask("./data/models/door");
 }
 
-
 // View tests.
 TEST(TestSuite, add_view_door)
 {
@@ -134,46 +141,59 @@ TEST(TestSuite, add_view_door)
 
 TEST(TestSuite, add_view_ball_rose)
 {
-  addView("./data/frames/ball-rose-model");
+  addView("./data/models/ball-rose");
 }
 
 TEST(TestSuite, add_view_ball_orange)
 {
-  addView("./data/frames/ball-orange-model");
+  addView("./data/models/ball-orange");
 }
-
 
 // Tracking tests.
 TEST(TestSuite, track_door)
 {
-  trackObject("./data/models/door", "./data/frames/door-frame");
+
+  std::vector<std::string> door_models;
+  door_models.push_back("./data/models/door");
+  trackObject(door_models, "./data/frames/door-frame");
 }
+
 
 TEST(TestSuite, track_ball_rose)
 {
-  trackObject("./data/frames/ball-rose-model",
-              "./data/frames/ball-rose-frame");
+  std::vector<std::string> ball_rose_models;
+  // ball_rose_models.push_back("./data/models/ball-rose");
+  // ball_rose_models.push_back("./data/models/ball-rose-2");
+  ball_rose_models.push_back("./data/models/ball-rose-3");
+  trackObject(ball_rose_models,"./data/frames/ball-rose-frame");
 }
 
 TEST(TestSuite, track_ball_rose2)
 {
-  trackObject("./data/frames/ball-rose-model",
-              "./data/frames/ball-orange-frame");
+  std::vector<std::string> ball_rose_models;
+  // ball_rose_models.push_back("./data/models/ball-rose");
+  // ball_rose_models.push_back("./data/models/ball-rose-2");
+  ball_rose_models.push_back("./data/models/ball-rose-3");
+  trackObject(ball_rose_models,"./data/frames/ball-orange-frame");
 }
-
 
 TEST(TestSuite, track_ball_orange)
 {
-  trackObject("./data/frames/ball-orange-model",
-              "./data/frames/ball-orange-frame");
+  std::vector<std::string> ball_orange_models;
+  // ball_orange_models.push_back("./data/models/ball-orange");
+  // ball_orange_models.push_back("./data/models/ball-orange-2");
+  ball_orange_models.push_back("./data/models/ball-orange-3");
+  trackObject(ball_orange_models,"./data/frames/ball-orange-frame");
 }
 
 TEST(TestSuite, track_ball_orange2)
 {
-  trackObject("./data/frames/ball-orange-model",
-              "./data/frames/ball-rose-frame");
+  std::vector<std::string> ball_orange_models;
+  // ball_orange_models.push_back("./data/models/ball-orange");
+  // ball_orange_models.push_back("./data/models/ball-orange-2");
+  ball_orange_models.push_back("./data/models/ball-orange-3");
+  trackObject(ball_orange_models,"./data/frames/ball-orange-frame");
 }
-
 
 int main(int argc, char **argv)
 {
