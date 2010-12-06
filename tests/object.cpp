@@ -111,8 +111,14 @@ TEST(TestSuite, simple)
 // Mask tests.
 TEST(TestSuite, compute_mask_ball_rose)
 {
-  computeMask("./data/models/ball-rose");
+  computeMask("./data/frames/ball-rose-model");
 }
+
+TEST(TestSuite, compute_mask_ball_orange)
+{
+  computeMask("./data/models/ball-orange");
+}
+
 
 TEST(TestSuite, compute_mask_door)
 {
@@ -126,9 +132,14 @@ TEST(TestSuite, add_view_door)
   addView("./data/models/door");
 }
 
-TEST(TestSuite, add_view_ball)
+TEST(TestSuite, add_view_ball_rose)
 {
-  addView("./data/models/ball-rose");
+  addView("./data/frames/ball-rose-model");
+}
+
+TEST(TestSuite, add_view_ball_orange)
+{
+  addView("./data/frames/ball-orange-model");
 }
 
 
@@ -140,10 +151,28 @@ TEST(TestSuite, track_door)
 
 TEST(TestSuite, track_ball_rose)
 {
-  trackObject("./data/models/ball-rose", "./data/frames/ball-frame");
+  trackObject("./data/frames/ball-rose-model",
+              "./data/frames/ball-rose-frame");
+}
+
+TEST(TestSuite, track_ball_rose2)
+{
+  trackObject("./data/frames/ball-rose-model",
+              "./data/frames/ball-orange-frame");
 }
 
 
+TEST(TestSuite, track_ball_orange)
+{
+  trackObject("./data/frames/ball-orange-model",
+              "./data/frames/ball-orange-frame");
+}
+
+TEST(TestSuite, track_ball_orange2)
+{
+  trackObject("./data/frames/ball-orange-model",
+              "./data/frames/ball-rose-frame");
+}
 
 
 int main(int argc, char **argv)
