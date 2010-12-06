@@ -33,8 +33,9 @@ void trackObject(const std::string& viewFilename,
   cv::rectangle(image, top_left, bottom_right,
 		cv::Scalar(0, 0, 255, 255), CV_FILLED);
 
-  boost::format filename("tracking_result_%s.png");
-  filename % frameFilename;
+  static int i = 0;
+  boost::format filename("tracking_result_%d.png");
+  filename % i++;
 
   if(!cv::imwrite(filename.str(), image))
     std::cerr << "Failed to save image.";
@@ -73,8 +74,9 @@ void addView(const std::string& viewFilename)
 
   EXPECT_EQ(object.modelHistogram.size(), 1u);
 
-  boost::format filename("hist_%s.png");
-  filename % viewFilename;
+  static int i = 0;
+  boost::format filename("hist_%d.png");
+  filename % i++;
   viewHistogram(object.modelHistogram[0], filename.str());
 }
 
@@ -84,8 +86,9 @@ void computeMask(const std::string& filename)
   cv::Mat img = cv::imread(filename + ".png");
   cv::Mat mask = object.computeMask(img);
 
-  boost::format outputFilename("mask_%s.png");
-  outputFilename % filename;
+  static int i = 0;
+  boost::format outputFilename("mask_%d.png");
+  outputFilename % i++;
   if(!cv::imwrite(outputFilename.str(), mask))
     std::cerr << "Failed to save image.";
 }
