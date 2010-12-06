@@ -227,7 +227,7 @@ namespace
   //FIXME: this is not as good as the original hueblob...
   void get3dBox(const cv::Mat& image,
 		const cv::Mat& disparity,
-		const cv::Rect& rect,
+		cv::Rect& rect,
 		const double f,
 		const double T,
 		const double Z_min,
@@ -240,8 +240,14 @@ namespace
 		cv::Point3d& max,
 		cv::Point3d& center)
   {
-    for (int y = rect.y; y < std::min(image.cols, rect.height); ++y)
-      for (int x = rect.x; x < std::min(image.rows, rect.width); ++x)
+    // Make sure the rectangle is valid.
+    rect.x = std::max(0, rect.x);
+    rect.y = std::max(0, rect.y);
+    rect.width = std::min(disparity.rows, rect.width);
+    rect.height = std::min(disparity.cols, rect.height);
+
+    for (int y = rect.y; y < rect.height; ++y)
+      for (int x = rect.x; x < rect.width; ++x)
 	{
 	  unsigned char d = disparity.at<unsigned char>(y, x);
 
@@ -298,6 +304,11 @@ HueBlob::trackBlob(const std::string& name)
     }
 
   cv::Rect rect = rrect->boundingRect();
+  if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0)
+    {
+      ROS_WARN("failed to track object (invalid tracking window)");
+      return blob_;
+    }
 
   // Convert disparity to OpenCV image.
   boost::shared_ptr<const sensor_msgs::Image> imagePtr
