@@ -43,3 +43,7 @@ rosbuild_download_test_data(
   http://www.laas.fr/~tmoulard/2010-11-29-18-07-39.bag
   data/2010-11-29-18-07-39.bag
   617eadf43514bdb7e9c36180506f8de0)
+rosbuild_download_test_data(
+  http://www.laas.fr/~tmoulard/2010-12-06-13-44-44.bag
+  data/2010-12-06-13-44-44.bag
+  e980b7522c3e230acbe1361ebf9c7f1e)
