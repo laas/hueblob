@@ -10,8 +10,8 @@ void trackObject(const std::string& viewFilename,
 		 const std::string& frameFilename)
 {
   Object object;
-  cv::Mat view = cv::imread(viewFilename);
-  cv::Mat image = cv::imread(frameFilename);
+  cv::Mat view = cv::imread(viewFilename + ".png");
+  cv::Mat image = cv::imread(frameFilename + ".png");
   object.addView(view);
 
   EXPECT_EQ(object.modelHistogram.size(), 1u);
@@ -65,6 +65,33 @@ void viewHistogram(const cv::MatND& hist, const std::string& filename)
     std::cerr << "Failed to save image.";
 }
 
+void addView(const std::string& viewFilename)
+{
+  Object object;
+  cv::Mat img = cv::imread(viewFilename + ".png");
+  object.addView(img);
+
+  EXPECT_EQ(object.modelHistogram.size(), 1u);
+
+  boost::format filename("hist_%s.png");
+  filename % viewFilename;
+  viewHistogram(object.modelHistogram[0], filename.str());
+}
+
+void computeMask(const std::string& filename)
+{
+  Object object;
+  cv::Mat img = cv::imread(filename + ".png");
+  cv::Mat mask = object.computeMask(img);
+
+  boost::format outputFilename("mask_%s.png");
+  outputFilename % filename;
+  if(!cv::imwrite(outputFilename.str(), mask))
+    std::cerr << "Failed to save image.";
+}
+
+
+// Misc. tests.
 TEST(TestSuite, simple)
 {
   Object object;
@@ -77,31 +104,44 @@ TEST(TestSuite, simple)
   EXPECT_EQ(object.modelHistogram.size(), 0u);
 }
 
-TEST(TestSuite, compute_mask)
-{
-  Object object;
-  cv::Mat img = cv::imread("./data/door.png");
-  cv::Mat mask = object.computeMask(img);
 
-  if(!cv::imwrite("mask.png", mask))
-    std::cerr << "Failed to save image.";
+// Mask tests.
+TEST(TestSuite, compute_mask_ball_rose)
+{
+  computeMask("./data/models/ball-rose");
 }
 
-TEST(TestSuite, add_view)
+TEST(TestSuite, compute_mask_door)
 {
-  Object object;
-  cv::Mat img = cvLoadImage("./data/models/door.png");
-  object.addView(img);
-
-  EXPECT_EQ(object.modelHistogram.size(), 1u);
-
-  viewHistogram(object.modelHistogram[0], "hist.png");
+  computeMask("./data/models/door");
 }
 
-TEST(TestSuite, track)
+
+// View tests.
+TEST(TestSuite, add_view_door)
 {
-  trackObject("./data/models/door.png", "./data/frames/door-frame.png");
+  addView("./data/models/door");
 }
+
+TEST(TestSuite, add_view_ball)
+{
+  addView("./data/models/ball-rose");
+}
+
+
+// Tracking tests.
+TEST(TestSuite, track_door)
+{
+  trackObject("./data/models/door", "./data/frames/door-frame");
+}
+
+TEST(TestSuite, track_ball_rose)
+{
+  trackObject("./data/models/ball-rose", "./data/frames/ball-frame");
+}
+
+
+
 
 int main(int argc, char **argv)
 {
