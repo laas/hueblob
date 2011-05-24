@@ -33,6 +33,7 @@
 # include "hueblob/TrackObject.h"
 
 
+# include "libhueblob/abstract-object.hh"
 # include "libhueblob/object.hh"
 
 
@@ -171,6 +172,10 @@ protected:
   /// asynchronously.
   ros::Publisher blobs_pub_;
 
+  /// Resulting tracked images
+  image_transport::Publisher tracked_left_pub_;
+  image_transport::Publisher tracked_right_pub_;
+
   /// \brief AddObject service server.
   ros::ServiceServer AddObject_srv_;
 
@@ -187,6 +192,7 @@ protected:
   ///
   /// This associates each object name to its definition.
   std::map<std::string, Object> objects_;
+  std::map<std::string, ColorObject> color_objects_;
 
   /// \brief Timer used to periodically report bad synchronization.
   ros::WallTimer check_synced_timer_;
@@ -199,6 +205,11 @@ protected:
   int disp_received_;
   /// \brief How many synchronized images received so far?
   int all_received_;
+
+  /// \brief Last received image for the left camera.
+  sensor_msgs::ImageConstPtr rightImage_;
+  /// \brief Last received left camera info.
+  sensor_msgs::CameraInfoConstPtr rightCamera_;
 
   /// \brief Last received image for the left camera.
   sensor_msgs::ImageConstPtr leftImage_;

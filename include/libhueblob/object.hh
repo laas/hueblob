@@ -1,5 +1,6 @@
 #ifndef HUEBLOB_OBJECT_HH
 # define HUEBLOB_OBJECT_HH
+# include "abstract-object.hh"
 # include <vector>
 # include <boost/optional.hpp>
 # include <opencv2/core/core.hpp>
@@ -11,11 +12,13 @@
 ///
 /// A 3d offset called anchor is also provided to tune
 /// the position of the 3d point associated with an object.
-struct Object {
+class Object : public AbstractObject{
+public:
+  explicit Object();
+
   static const int h_bins = 25;
   static const int s_bins = 25;
 
-  explicit Object();
 
 
   /// \brief Build the view histogram and append it to modelHistogram.
@@ -31,7 +34,7 @@ struct Object {
   /// \param image track in which the object will be tracked.
   /// \return a rotated rectangle if the object has been successfully tracked,
   ///         otherwise nothing.
-  boost::optional<cv::RotatedRect> track(const cv::Mat& image);
+  virtual boost::optional<cv::RotatedRect> track(const cv::Mat& image);
 
 
   /// \brief Compute image mask used for histogram computation.

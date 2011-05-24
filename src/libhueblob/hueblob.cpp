@@ -9,10 +9,16 @@
 #include <hueblob/AddObject.h>
 
 #include "libhueblob/hueblob.hh"
+#include <ros/console.h>
+#include <cv_bridge/CvBridge.h>
+#include <opencv/highgui.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
 
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
-
 HueBlob::HueBlob()
   : nh_("hueblob"),
     it_(nh_),
@@ -39,13 +45,18 @@ HueBlob::HueBlob()
     right_received_(),
     disp_received_(),
     all_received_(),
+    rightImage_(),
+    rightCamera_(),
     leftImage_(),
     leftCamera_(),
     disparity_()
 {
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
-  ros::param::param<double>("threshold", threshold_, 75.);
+  ros::param::param<double>("threshold", threshold_, 90.);
+
+  tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 5);
+  tracked_right_pub_ = it_.advertise("/hueblob/tracked/right/image_rec_color", 5);
 
   // Initialize the node subscribers, publishers and filters.
   setupInfrastructure(stereo_topic_prefix_);
@@ -59,7 +70,7 @@ HueBlob::~HueBlob()
 void
 HueBlob::spin()
 {
-  typedef std::pair<const std::string&, const Object&> iterator_t;
+  typedef std::pair<const std::string&, const AbstractObject&> iterator_t;
 
   ros::Rate loop_rate(10);
 
@@ -74,6 +85,7 @@ HueBlob::spin()
       //  for some objects?
       BOOST_FOREACH(iterator_t it, objects_)
 	{
+          ROS_DEBUG_STREAM("Tracking " << it.first );
 	  hueblob::Blob blob = trackBlob(it.first);
 	  blobs.blobs.push_back(blob);
 	}
@@ -151,6 +163,8 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 {
   leftImage_ = left;
   leftCamera_ = left_camera;
+  rightImage_ = right;
+  rightCamera_ = right_camera;
   disparity_ = disparity;
 }
 
@@ -160,7 +174,7 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 {
   response.status = 0;
 
-  // Convert ROS image to OpenCV.
+  ROS_DEBUG("Converting ROS image to OpenCV.");
   IplImage* model_ = 0;
   sensor_msgs::CvBridge bridge;
   try
@@ -178,8 +192,8 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
 
   // Get reference on the object.
-  Object& object = objects_[request.name];
 
+  Object& object = objects_[request.name];
   // Emit a warning if the object already exists.
   if (object.anchor_x
       || object.anchor_y
@@ -193,6 +207,7 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
   // Add the view to the object.
   object.addView(model);
+  ROS_DEBUG("Added view");
 
   return true;
 }
@@ -300,16 +315,44 @@ HueBlob::trackBlob(const std::string& name)
     return blob;
 
   // Realize 2d tracking in the image.
-  Object& object = objects_[name];
+  // HACK, comment these 3 lines out!
+  Object object;
+  cv::Mat view = cv::imread("/home/nddang/src/ros/hueblob/data/models/ball-rose-3.png");
+  object.addView(view);
+  // End hack
+  namespace enc = sensor_msgs::image_encodings;
+  cv::Mat image_r(bridgeLeft_.imgMsgToCv(rightImage_, "bgr8"), false);
+  boost::optional<cv::RotatedRect> rrect_r = object.track(image_r);
+  cv_bridge::CvImagePtr cv_ptr_r;
+  cv::Rect rect_r = rrect_r->boundingRect();
+  cv_ptr_r = cv_bridge::toCvCopy(rightImage_, enc::BGR8);
+  cv::Point top_left_r(rect_r.x, rect_r.y);
+  cv::Point bottom_right_r(rect_r.x + rect_r.width,
+                         rect_r.y + rect_r.height);
+  cv::rectangle(cv_ptr_r->image, top_left_r, bottom_right_r,
+        	cv::Scalar(0, 0, 255, 255), CV_FILLED);
+  tracked_right_pub_.publish(cv_ptr_r->toImageMsg());
+
   cv::Mat image(bridgeLeft_.imgMsgToCv(leftImage_, "bgr8"), false);
   boost::optional<cv::RotatedRect> rrect = object.track(image);
+  cv_bridge::CvImagePtr cv_ptr;
+  cv::Rect rect = rrect->boundingRect();
+  cv_ptr = cv_bridge::toCvCopy(leftImage_, enc::BGR8);
+  cv::Point top_left(rect.x, rect.y);
+  cv::Point bottom_right(rect.x + rect.width,
+                         rect.y + rect.height);
+  cv::rectangle(cv_ptr->image, top_left, bottom_right,
+        	cv::Scalar(0, 0, 255, 255), CV_FILLED);
+  tracked_left_pub_.publish(cv_ptr->toImageMsg());
+
+
+
   if (!rrect)
     {
       ROS_WARN_THROTTLE(20, "failed to track object");
       return blob;
     }
 
-  cv::Rect rect = rrect->boundingRect();
 
   blob.boundingbox_2d[0] = rect.x;
   blob.boundingbox_2d[1] = rect.y;
