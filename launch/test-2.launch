@@ -2,7 +2,7 @@
   <node pkg="rosbag"
 	type="rosbag"
 	name="stereo"
-	args="play -l $(find hueblob)/data/test2.bag"
+	args="play -l $(find hueblob)/data/2010-12-06-13-44-44.bag"
 	/>
 
   <node

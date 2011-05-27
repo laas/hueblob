@@ -4,7 +4,6 @@
 
 // Histogram parameters initialization.
 static const int hist_size[] = {Object::h_bins, Object::s_bins};
-
 //  0 (~0°red) to 180 (~360°red again)
 static const float hue_range[] = { 0, 250 };
 //  0 (black-gray-white) to 255 (pure spectrum color)
