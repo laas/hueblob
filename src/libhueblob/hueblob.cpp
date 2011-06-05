@@ -10,6 +10,9 @@
 
 #include "libhueblob/hueblob.hh"
 
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
 
@@ -40,6 +43,7 @@ HueBlob::HueBlob()
     disp_received_(),
     all_received_(),
     leftImage_(),
+    rightImage_(),
     leftCamera_(),
     disparity_()
 {
@@ -47,8 +51,13 @@ HueBlob::HueBlob()
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<double>("threshold", threshold_, 75.);
 
+  tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 1);
+  tracked_right_pub_ = it_.advertise("/hueblob/tracked/right/image_rec_color", 1);
+
   // Initialize the node subscribers, publishers and filters.
   setupInfrastructure(stereo_topic_prefix_);
+
+
 }
 
 HueBlob::~HueBlob()
@@ -64,9 +73,14 @@ HueBlob::spin()
   ros::Rate loop_rate(10);
 
   ROS_DEBUG("Entering the node main loop.");
+  cv::Mat img;
   while (ros::ok())
     {
       hueblob::Blobs blobs;
+
+      if (leftImage_)
+        img = bridgeLeft_.imgMsgToCv(leftImage_, "bgr8");
+
 
       //FIXME: currently iterate on all blobs.
       // Should we prune untrackable blobs?
@@ -77,8 +91,31 @@ HueBlob::spin()
 	  hueblob::Blob blob = trackBlob(it.first);
 	  blobs.blobs.push_back(blob);
 	}
-      blobs_pub_.publish(blobs);
 
+      for (  std::vector<hueblob::Blob>::iterator iter= blobs.blobs.begin();
+             iter != blobs.blobs.end(); iter++ )
+        {
+          int x =  (*iter).boundingbox_2d[0];
+          int y =  (*iter).boundingbox_2d[1];
+          int width =  (*iter).boundingbox_2d[2];
+          int height =  (*iter).boundingbox_2d[3];
+          cv::Point p1(x, y);
+          cv::Point p2(x + width, y + height);
+          const cv::Scalar color = CV_RGB(255,0,0);
+          // ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
+          //                  << " " << width << " " << height);
+          cv::rectangle(img, p1, p2, color, 1);
+        }
+
+      if (leftImage_){
+        cv_bridge::CvImage brd_im;
+        brd_im.image = img;
+        brd_im.header = leftImage_->header;
+        brd_im.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
+        tracked_left_pub_.publish(brd_im.toImageMsg());
+      }
+
+      blobs_pub_.publish(blobs);
       ros::spinOnce();
       loop_rate.sleep();
     }

@@ -1,7 +1,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/video/tracking.hpp>
 #include "libhueblob/object.hh"
-
+#include <algorithm>
+#include <iostream>
+#include "highgui.h"
 // Histogram parameters initialization.
 static const int hist_size[] = {Object::h_bins, Object::s_bins};
 //  0 (~0°red) to 180 (~360°red again)
@@ -13,7 +15,9 @@ static const float* ranges[] = { hue_range, sat_range };
 
 
 Object::Object()
-  :  anchor_x(),
+  :
+     algo(NAIVE),
+     anchor_x(),
      anchor_y(),
      anchor_z(),
      modelHistogram(),
@@ -32,10 +36,14 @@ Object::computeMask(const cv::Mat& model)
   return mask;
 }
 void
-Object::addView(const cv::Mat& model)
+Object::addView(const cv::Mat&)
 {
   // Compute the mask.
+  cv::Mat model = cv::imread("/home/nddang/src/ros/hueblob/data/models/ball-orange-3.png");
   cv::Mat mask = computeMask(model);
+  // cv::namedWindow("test", CV_WINDOW_AUTOSIZE);
+  // cv::imshow("test", model );
+  // cv::waitKey();
 
   // Compute the histogram.
   //  only use channels 0 and 1 (hue and saturation).
@@ -43,7 +51,9 @@ Object::addView(const cv::Mat& model)
   cv::Mat hsv;
   cv::MatND hist;
   cv::cvtColor(model, hsv, CV_BGR2HSV);
-
+  // cv::imshow("test", hsv );
+  // cv::waitKey();
+  using namespace std;
   calcHist(&hsv, 1, channels, mask,
 	   hist, 2, hist_size, ranges,
 	   true, false);
@@ -58,6 +68,71 @@ Object::addView(const cv::Mat& model)
   cv::Mat hist_(hist);
   cv::convertScaleAbs(hist_, hist_, max ? 255. / max : 0., 0);
   this->modelHistogram.push_back(hist);
+
+  // compute histogram and thresholds for naive method
+  getThresholds(hsv);
+}
+
+void
+Object::getThresholds(const cv::Mat& hsv_img)
+{
+  cv::MatND hist;
+  cv::Mat mask(hsv_img.size(), CV_8UC1);
+  cv::inRange(hsv_img, cv::Scalar(0,50,50),
+	      cv::Scalar(255, 255, 255),mask);
+  int channels[] = {0};
+  unsigned hbins = 255;
+  const int hist_size[] = {hbins};
+  float hranges[] = {0,255};
+  const float* ranges[] = { hranges };
+  cv::calcHist(&hsv_img, 1, channels, mask,
+               hist, 1, hist_size,
+               ranges, true, false);
+  // normalize hist
+  cv::normalize(hist, hist, 1, 0, cv::NORM_L1);
+  double maxVal;
+  int maxIdx;
+  minMaxLoc(hist, NULL, &maxVal, NULL, &maxIdx);
+  peak_color[0] = maxIdx;
+  peak_color[1] = 200;
+  peak_color[2] = 200;
+  unsigned maxh(0), minh(255);
+  for (unsigned h = 0; h < hbins; h++)
+    {
+      if (abs(float(h) - float(maxIdx)) > 20 || hist.at<float>(h) < 0.02*maxVal)
+        continue;
+      maxh = std::max(maxh, h);
+      minh = std::min(minh, h);
+    }
+  //ROS_DEBUG_STREAM(minh << " " << maxh);
+  cv::inRange(hsv_img, cv::Scalar(minh,50,50),
+	      cv::Scalar(maxh, 255, 255),mask);
+
+
+  cv::Mat hchan(hsv_img.size(), CV_8UC1);
+  cv::Mat schan(hsv_img.size(), CV_8UC1);
+  cv::Mat vchan(hsv_img.size(), CV_8UC1);
+  cv::Mat chans[] = {hchan, schan, vchan};
+  cv::split(hsv_img, chans);
+
+  minMaxLoc(hchan, &lower_hue[0], &upper_hue[0], 0, 0, mask);
+  minMaxLoc(schan, &lower_hue[1], &upper_hue[1], 0, 0, mask);
+  minMaxLoc(vchan, &lower_hue[2], &upper_hue[2], 0, 0, mask);
+  // Tolerance for s and v
+  upper_hue[1] = 255;
+  upper_hue[2] = 255;
+  // float tol = 1.1;
+  // lower[1]/= tol;o
+  // lower[2]/= tol;
+  // upper[1]*= tol;
+  // upper[2]*= tol;
+  std::cout << maxIdx << " " << std::endl;
+  std::cout << lower_hue[0] << " "
+            << lower_hue[1] << " "
+            << lower_hue[2] << " " << std::endl;
+  std::cout << upper_hue[0] << " "
+            << upper_hue[1] << " "
+            << upper_hue[2] << " " << std::endl;
 }
 
 namespace
@@ -82,6 +157,57 @@ namespace
 
 boost::optional<cv::RotatedRect>
 Object::track(const cv::Mat& image)
+{
+  switch (algo) {
+  case CAMSHIFT:
+    return track_camshift(image); break;;
+  case NAIVE:
+    return track_naive(image); break;
+    }
+}
+
+boost::optional<cv::RotatedRect>
+Object::track_naive(const cv::Mat& image)
+{
+  cv::Mat imgHSV(image.rows, image.cols, CV_8UC3);
+  cv::cvtColor(image, imgHSV, CV_BGR2HSV);
+  cv::Mat  imgThreshed(image.rows, image.cols, CV_8UC1);
+  cv::inRange(imgHSV, lower_hue,
+              upper_hue, imgThreshed);
+  std::vector< std::vector<cv::Point2i> > contours;
+  std::vector<cv::Vec4i> hierarchy;
+  cv::dilate(imgThreshed, imgThreshed, cv::Mat() );
+  cv::erode(imgThreshed, imgThreshed, cv::Mat() );
+  cv::findContours(imgThreshed, contours,
+                   CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE );
+  typedef std::vector<cv::Point2i> Contour;
+  Contour largest_contour;
+  double max_area = 0;
+  for (  std::vector<Contour>::iterator
+           iter= contours.begin();
+         iter != contours.end(); iter++ )
+    {
+      Contour contour = *iter;
+      double area = cv::contourArea(cv::Mat(contour));
+      if (area > max_area)
+        {
+          largest_contour = contour;
+          max_area = area;
+        }
+    }
+  cv::RotatedRect rrect;
+  if (max_area > 0)
+    {
+      cv::Rect rect = cv::boundingRect(cv::Mat(largest_contour));
+      rrect.center = cv::Point2f(rect.x + rect.width/2,
+                                 rect.y + rect.height/2);
+      rrect.size = cv::Size(rect.width, rect.height);
+    }
+  return rrect;
+}
+
+boost::optional<cv::RotatedRect>
+Object::track_camshift(const cv::Mat& image)
 {
   boost::optional<cv::RotatedRect> result;
 

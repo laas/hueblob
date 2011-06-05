@@ -171,6 +171,10 @@ protected:
   /// asynchronously.
   ros::Publisher blobs_pub_;
 
+  /// Resulting tracked images
+  image_transport::Publisher tracked_left_pub_;
+  image_transport::Publisher tracked_right_pub_;
+
   /// \brief AddObject service server.
   ros::ServiceServer AddObject_srv_;
 
@@ -202,6 +206,7 @@ protected:
 
   /// \brief Last received image for the left camera.
   sensor_msgs::ImageConstPtr leftImage_;
+  sensor_msgs::ImageConstPtr rightImage_;
   /// \brief Last received left camera info.
   sensor_msgs::CameraInfoConstPtr leftCamera_;
   /// \brief Last received disparity.

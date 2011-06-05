@@ -11,10 +11,16 @@
 ///
 /// A 3d offset called anchor is also provided to tune
 /// the position of the 3d point associated with an object.
+
+typedef enum{
+  NAIVE,
+  CAMSHIFT
+} algo_t;
+
 struct Object {
   static const int h_bins = 25;
   static const int s_bins = 25;
-
+  algo_t algo;
   explicit Object();
 
 
@@ -25,13 +31,15 @@ struct Object {
   ///
   /// \param view reference to the view
   void addView(const cv::Mat& view);
-
+  void getThresholds(const cv::Mat& hsv_img);
   /// \brief Track the object in the current image.
   ///
   /// \param image track in which the object will be tracked.
   /// \return a rotated rectangle if the object has been successfully tracked,
   ///         otherwise nothing.
   boost::optional<cv::RotatedRect> track(const cv::Mat& image);
+  boost::optional<cv::RotatedRect> track_camshift(const cv::Mat& image);
+  boost::optional<cv::RotatedRect> track_naive(const cv::Mat& image);
 
 
   /// \brief Compute image mask used for histogram computation.
@@ -51,8 +59,15 @@ struct Object {
   /// \}
 
   /// \brief Contains all the histograms associated with this object.
+  // hue and sat used by CAMShift algorithm
   std::vector<cv::MatND> modelHistogram;
 
+  // only hue
+  std::vector<cv::MatND> hueHistogram;
+  // bounding hues
+  cv::Scalar lower_hue;
+  cv::Scalar upper_hue;
+  cv::Scalar peak_color;
   /// \brief Object search window.
   ///
   /// Where the object has been seen the last time it has been
