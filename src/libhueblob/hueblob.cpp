@@ -12,7 +12,11 @@
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
-
+#include <highgui.h>
+#include <sstream>
+#include <algorithm>
+#include <numeric>
+#include <boost/format.hpp>
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
 
@@ -49,10 +53,13 @@ HueBlob::HueBlob()
 {
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
+  ros::param::param<std::string>("~algo", algo_, "camshift");
+  ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<double>("threshold", threshold_, 75.);
 
   tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 1);
   tracked_right_pub_ = it_.advertise("/hueblob/tracked/right/image_rec_color", 1);
+
 
   // Initialize the node subscribers, publishers and filters.
   setupInfrastructure(stereo_topic_prefix_);
@@ -105,6 +112,13 @@ HueBlob::spin()
           // ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
           //                  << " " << width << " " << height);
           cv::rectangle(img, p1, p2, color, 1);
+          stringstream ss (stringstream::in | stringstream::out);
+          boost::format fmter("[%3.3f %3.3f %3.3f]");
+          (fmter % (*iter).position.transform.translation.x
+           %  (*iter).position.transform.translation.y
+           %  (*iter).position.transform.translation.z
+           );
+          cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
         }
 
       if (leftImage_){
@@ -204,7 +218,7 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
     {
       boost::shared_ptr<sensor_msgs::Image> image_ptr
 	(&request.image, nullDeleter);
-      model_ = bridge.imgMsgToCv(image_ptr,"rgb8");
+      model_ = bridge.imgMsgToCv(image_ptr,"bgr8");
     }
   catch(const sensor_msgs::CvBridgeException& error)
     {
@@ -216,6 +230,12 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
   // Get reference on the object.
   Object& object = objects_[request.name];
+  if (algo_ == "naive")
+    object.algo = NAIVE;
+  else if (algo_ == "camshift")
+    object.algo = CAMSHIFT;
+
+
 
   // Emit a warning if the object already exists.
   if (object.anchor_x
@@ -261,6 +281,48 @@ HueBlob::TrackObjectCallback(hueblob::TrackObject::Request& request,
 
 namespace
 {
+
+
+
+  void get3dCloud(const cv::Mat& image,
+                  const cv::Mat& disparity,
+                  cv::Rect& rect,
+                  const double f,
+                  const double T,
+                  const double Z_min,
+                  const double Z_max,
+                  const double u0,
+                  const double v0,
+                  const double px,
+                  const double py,
+                  std::vector<cv::Vec3d>& cloud
+                  )
+  {
+
+    // Make sure the rectangle is valid.
+
+    rect.x = std::max(0, rect.x);
+    rect.y = std::max(0, rect.y);
+    rect.width = std::min(disparity.rows, rect.width);
+    rect.height = std::min(disparity.cols, rect.height);
+    cloud.clear();
+    for (int y = rect.y; y < rect.y + rect.height; ++y)
+      for (int x = rect.x; x < rect.x + rect.width; ++x)
+	{
+	  unsigned char d = disparity.at<unsigned char>(y, x);
+	  //FIXME: check transformation.
+	  double X = (x - u0) / px;
+	  double Y = (y - v0) / py;
+	  double Z = (d > 0) ? (1.0*f * T / d) : 0.;
+
+	  // If the point is not part of the horopter, ignore it.
+	  if (Z < Z_min || Z > Z_max)
+	    continue;
+          cloud.push_back(cv::Vec3d(X, Y, Z));
+
+        }
+  }
+
   //FIXME: this is not as good as the original hueblob...
   void get3dBox(const cv::Mat& image,
 		const cv::Mat& disparity,
@@ -278,24 +340,29 @@ namespace
 		cv::Point3d& center)
   {
     // Make sure the rectangle is valid.
+
     rect.x = std::max(0, rect.x);
     rect.y = std::max(0, rect.y);
     rect.width = std::min(disparity.rows, rect.width);
     rect.height = std::min(disparity.cols, rect.height);
-
-    for (int y = rect.y; y < rect.height; ++y)
-      for (int x = rect.x; x < rect.width; ++x)
+    for (int y = rect.y; y < rect.y + rect.height; ++y)
+      for (int x = rect.x; x < rect.x + rect.width; ++x)
 	{
 	  unsigned char d = disparity.at<unsigned char>(y, x);
-
 	  //FIXME: check transformation.
 	  double X = (x - u0) / px;
 	  double Y = (y - v0) / py;
-	  double Z = (d > 0) ? (f * T / d) : 0.;
+	  double Z = (d > 0) ? (1.0*f * T / d) : 0.;
 	  cv::Point3d p(X, Y, Z);
 
 	  // If the point is not part of the horopter, ignore it.
 	  if (Z < Z_min || Z > Z_max)
+            // ROS_DEBUG_STREAM_THROTTLE(0.2,"x=" << x
+            //                           << " y=" << y
+            //                           << " d=" << static_cast<int>(d)
+            //                           << "\nignoring: Z=" << Z
+            //                           << " Z_min=" << Z_min
+            //                           << " Z_max=" << Z_max);
 	    continue;
 
 	  // Update extrema.
@@ -312,6 +379,7 @@ namespace
 	    max.y = p.y;
 	  if (p.z > max.z)
 	    max.z = p.z;
+          //ROS_DEBUG_STREAM(p.x << " " << p.y << " " << p.z);
 	}
     center.x = std::fabs(max.x - min.x) / 2.;
     center.y = std::fabs(max.y - min.y) / 2.;
@@ -379,7 +447,21 @@ HueBlob::trackBlob(const std::string& name)
   cv::Point3d center;
   get3dBox(image, disparity, rect, f, T,
 	   Z_min, Z_max, u0, v0, px, py, min, max, center);
-
+  std::vector<cv::Vec3d> cloud;
+  get3dCloud(image, disparity, rect, f, T,
+	   Z_min, Z_max, u0, v0, px, py, cloud);
+  cv::Vec3d mean_point(0., 0., 0.);
+  int sz = cloud.size();
+  mean_point = std::accumulate(cloud.begin(),
+                               cloud.end(), mean_point);
+  mean_point *= 1.0/sz;
+  // ROS_DEBUG_STREAM( sz << " "
+  //                  << mean_point[0] << " "
+  //                  << mean_point[1] << " "
+  //                  << mean_point[2]);
+  center.x = mean_point[0];
+  center.y = mean_point[1];
+  center.z = mean_point[2];
   center.x += object.anchor_x;
   center.y += object.anchor_y;
   center.z += object.anchor_z;

@@ -15,3 +15,9 @@ cmake_install.cmake
 data/2010-11-29-18-07-39.bag
 data/2010-12-06-13-44-44.bag
 *[A-Za-z_1-9]*.png
+*wip.*
+*.bag
+*.gif
+track_results
+build
+*draft.cpp

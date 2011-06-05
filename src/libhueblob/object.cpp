@@ -16,7 +16,7 @@ static const float* ranges[] = { hue_range, sat_range };
 
 Object::Object()
   :
-     algo(NAIVE),
+     algo(CAMSHIFT),
      anchor_x(),
      anchor_y(),
      anchor_z(),
@@ -36,10 +36,9 @@ Object::computeMask(const cv::Mat& model)
   return mask;
 }
 void
-Object::addView(const cv::Mat&)
+Object::addView(const cv::Mat& model)
 {
   // Compute the mask.
-  cv::Mat model = cv::imread("/home/nddang/src/ros/hueblob/data/models/ball-orange-3.png");
   cv::Mat mask = computeMask(model);
   // cv::namedWindow("test", CV_WINDOW_AUTOSIZE);
   // cv::imshow("test", model );
@@ -104,7 +103,7 @@ Object::getThresholds(const cv::Mat& hsv_img)
       maxh = std::max(maxh, h);
       minh = std::min(minh, h);
     }
-  //ROS_DEBUG_STREAM(minh << " " << maxh);
+
   cv::inRange(hsv_img, cv::Scalar(minh,50,50),
 	      cv::Scalar(maxh, 255, 255),mask);
 
@@ -158,12 +157,11 @@ namespace
 boost::optional<cv::RotatedRect>
 Object::track(const cv::Mat& image)
 {
-  switch (algo) {
-  case CAMSHIFT:
-    return track_camshift(image); break;;
-  case NAIVE:
-    return track_naive(image); break;
-    }
+
+  if (algo == CAMSHIFT)
+    return track_camshift(image);
+  if (algo == NAIVE)
+    return track_naive(image);
 }
 
 boost::optional<cv::RotatedRect>

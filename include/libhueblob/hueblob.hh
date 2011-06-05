@@ -211,6 +211,9 @@ protected:
   sensor_msgs::CameraInfoConstPtr leftCamera_;
   /// \brief Last received disparity.
   stereo_msgs::DisparityImageConstPtr disparity_;
+
+  /// blob dectection algorithm to be used
+  std::string algo_;
 };
 
 #endif //! HUEBLOB_HUEBLOB_H

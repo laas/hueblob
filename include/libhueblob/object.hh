@@ -13,8 +13,8 @@
 /// the position of the 3d point associated with an object.
 
 typedef enum{
-  NAIVE,
-  CAMSHIFT
+  CAMSHIFT = 0,
+  NAIVE = 1,
 } algo_t;
 
 struct Object {
