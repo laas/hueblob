@@ -17,6 +17,12 @@
 #include <algorithm>
 #include <numeric>
 #include <boost/format.hpp>
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/features/feature.h>
+#include "pcl/filters/statistical_outlier_removal.h"
+//#include <pcl_visualization/cloud_viewer.h>
+#include <Eigen/Dense>
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
 
@@ -32,6 +38,7 @@ HueBlob::HueBlob()
     disparity_sub_(),
     sync_(3),
     blobs_pub_(nh_.advertise<hueblob::Blobs>("blobs", 5)),
+    cloud_pub_(nh_.advertise<pcl::PointCloud<pcl::PointXYZ> > ("points2", 1)),
     AddObject_srv_(nh_.advertiseService
 		   ("add_object", &HueBlob::AddObjectCallback, this)),
     ListObject_srv_(nh_.advertiseService
@@ -40,7 +47,8 @@ HueBlob::HueBlob()
 		  ("rm_object", &HueBlob::RmObjectCallback, this)),
     TrackObject_srv_(nh_.advertiseService
 		   ("track_object", &HueBlob::TrackObjectCallback, this)),
-    objects_(),
+    left_objects_(),
+    right_objects_(),
     check_synced_timer_(),
     left_received_(),
     right_received_(),
@@ -93,7 +101,7 @@ HueBlob::spin()
       // Should we prune untrackable blobs?
       // Should we provide a way to disable tracking
       //  for some objects?
-      BOOST_FOREACH(iterator_t it, objects_)
+      BOOST_FOREACH(iterator_t it, left_objects_)
 	{
 	  hueblob::Blob blob = trackBlob(it.first);
 	  blobs.blobs.push_back(blob);
@@ -108,17 +116,26 @@ HueBlob::spin()
           int height =  (*iter).boundingbox_2d[3];
           cv::Point p1(x, y);
           cv::Point p2(x + width, y + height);
+          cv::Point pc(x, y + std::max(16, height+8));
           const cv::Scalar color = CV_RGB(255,0,0);
           // ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
           //                  << " " << width << " " << height);
           cv::rectangle(img, p1, p2, color, 1);
           stringstream ss (stringstream::in | stringstream::out);
-          boost::format fmter("[%3.3f %3.3f %3.3f]");
-          (fmter % (*iter).position.transform.translation.x
+          boost::format fmter("[%3.3f %3.3f %3.3f %1.2f]");
+          (fmter % (*iter).cloud_centroid.transform.translation.x
+           %  (*iter).cloud_centroid.transform.translation.y
+           %  (*iter).cloud_centroid.transform.translation.z
+           %  (*iter).depth_density
+           );
+          cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
+
+          boost::format fmter2("[%3.3f %3.3f %3.3f]");
+          (fmter2 % (*iter).position.transform.translation.x
            %  (*iter).position.transform.translation.y
            %  (*iter).position.transform.translation.z
            );
-          cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
+          cv::putText(img, fmter2.str(), pc, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
         }
 
       if (leftImage_){
@@ -201,6 +218,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
   leftImage_ = left;
+  rightImage_ = right;
   leftCamera_ = left_camera;
   disparity_ = disparity;
 }
@@ -229,27 +247,38 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
 
   // Get reference on the object.
-  Object& object = objects_[request.name];
+  Object& left_object = left_objects_[request.name];
+  Object& right_object = right_objects_[request.name];
   if (algo_ == "naive")
-    object.algo = NAIVE;
+    {
+      left_object.algo = NAIVE;
+      right_object.algo = NAIVE;
+    }
   else if (algo_ == "camshift")
-    object.algo = CAMSHIFT;
-
+    {
+      left_object.algo = CAMSHIFT;
+      right_object.algo = CAMSHIFT;
+    }
 
 
   // Emit a warning if the object already exists.
-  if (object.anchor_x
-      || object.anchor_y
-      || object.anchor_z)
+  if (left_object.anchor_x
+      || left_object.anchor_y
+      || left_object.anchor_z)
     ROS_WARN("Overwriting the object %s", request.name.c_str());
 
   // Initialize the object.
-  object.anchor_x = request.anchor.x;
-  object.anchor_y = request.anchor.y;
-  object.anchor_z = request.anchor.z;
-
+  left_object.anchor_x = request.anchor.x;
+  left_object.anchor_y = request.anchor.y;
+  left_object.anchor_z = request.anchor.z;
   // Add the view to the object.
-  object.addView(model);
+  left_object.addView(model);
+
+  right_object.anchor_x = request.anchor.x;
+  right_object.anchor_y = request.anchor.y;
+  right_object.anchor_z = request.anchor.z;
+  // Add the view to the object.
+  right_object.addView(model);
 
   return true;
 }
@@ -259,7 +288,7 @@ HueBlob::ListObjectCallback(hueblob::ListObject::Request& request,
 			    hueblob::ListObject::Response& response)
 {
   typedef std::pair<const std::string&, const Object&> iterator_t;
-  BOOST_FOREACH(iterator_t it, objects_)
+  BOOST_FOREACH(iterator_t it, left_objects_)
     response.objects.push_back(it.first);
   return true;
 }
@@ -268,7 +297,8 @@ bool
 HueBlob::RmObjectCallback(hueblob::RmObject::Request& request,
 			  hueblob::RmObject::Response& response)
 {
-  objects_.erase(request.name);
+  left_objects_.erase(request.name);
+  right_objects_.erase(request.name);
   return true;
 }
 
@@ -287,6 +317,7 @@ namespace
   void get3dCloud(const cv::Mat& image,
                   const cv::Mat& disparity,
                   cv::Rect& rect,
+                  cv::Rect& right_rect,
                   const double f,
                   const double T,
                   const double Z_min,
@@ -295,17 +326,47 @@ namespace
                   const double v0,
                   const double px,
                   const double py,
-                  std::vector<cv::Vec3d>& cloud
+                  pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud,
+                  cv::Point3f& center_est
                   )
   {
+    cv::Point2f right_center(right_rect.x
+                             + right_rect.width*0.5,
+                             right_rect.y
+                             + right_rect.height*0.5);
+    cv::Point2f left_center(rect.x
+                            + rect.width*0.5,
+                            rect.y
+                            + rect.height*0.5);
 
     // Make sure the rectangle is valid.
-
-    rect.x = std::max(0, rect.x);
-    rect.y = std::max(0, rect.y);
-    rect.width = std::min(disparity.rows, rect.width);
-    rect.height = std::min(disparity.cols, rect.height);
-    cloud.clear();
+    // check if the size of two rect are not too different
+    if (std::fabs(right_center.y - left_center.y) > 3 ||
+        1.0*(rect.width/right_rect.width) > 1.5 ||
+        1.0*(rect.width/right_rect.width) < 0.5
+        )
+      {
+        center_est.x = 0;
+        center_est.y = 0;
+        center_est.z = 0;
+      }
+    else
+      {
+        //ROS_DEBUG_STREAM(right_center << " " << left_center << " ");
+        rect.x = std::max(0, rect.x);
+        rect.y = std::max(0, rect.y);
+        rect.width = std::min(disparity.rows, rect.width);
+        rect.height = std::min(disparity.cols, rect.height);
+        float d = left_center.x - right_center.x;
+        double x = left_center.x;
+        double y = left_center.y;
+        center_est.x = (x - u0) / px;
+        center_est.y = (y - v0) / py;
+        center_est.z = (1.0*f * T / d);
+        // ROS_DEBUG_STREAM(left_center << " "
+        //                  << right_center << " "
+        //                  << center_est);
+      }
     for (int y = rect.y; y < rect.y + rect.height; ++y)
       for (int x = rect.x; x < rect.x + rect.width; ++x)
 	{
@@ -318,8 +379,8 @@ namespace
 	  // If the point is not part of the horopter, ignore it.
 	  if (Z < Z_min || Z > Z_max)
 	    continue;
-          cloud.push_back(cv::Vec3d(X, Y, Z));
-
+          pcl::PointXYZ point(X,Y,Z);
+          pcl_cloud->points.push_back(point);
         }
   }
 
@@ -405,16 +466,22 @@ HueBlob::trackBlob(const std::string& name)
     return blob;
 
   // Realize 2d tracking in the image.
-  Object& object = objects_[name];
+  Object& robject = right_objects_[name];
+  // get box for right image
+  cv::Mat right_image(bridgeLeft_.imgMsgToCv(rightImage_, "bgr8"), false);
+  boost::optional<cv::RotatedRect> right_rrect = robject.track(right_image);
+
+  Object& object = left_objects_[name];
   cv::Mat image(bridgeLeft_.imgMsgToCv(leftImage_, "bgr8"), false);
   boost::optional<cv::RotatedRect> rrect = object.track(image);
-  if (!rrect)
+  if (!rrect || !right_rrect)
     {
       ROS_WARN_THROTTLE(20, "failed to track object");
       return blob;
     }
 
   cv::Rect rect = rrect->boundingRect();
+  cv::Rect right_rect = right_rrect->boundingRect();
 
   blob.boundingbox_2d[0] = rect.x;
   blob.boundingbox_2d[1] = rect.y;
@@ -445,35 +512,66 @@ HueBlob::trackBlob(const std::string& name)
   cv::Point3d min;
   cv::Point3d max;
   cv::Point3d center;
-  get3dBox(image, disparity, rect, f, T,
-	   Z_min, Z_max, u0, v0, px, py, min, max, center);
-  std::vector<cv::Vec3d> cloud;
-  get3dCloud(image, disparity, rect, f, T,
-	   Z_min, Z_max, u0, v0, px, py, cloud);
-  cv::Vec3d mean_point(0., 0., 0.);
-  int sz = cloud.size();
-  mean_point = std::accumulate(cloud.begin(),
-                               cloud.end(), mean_point);
-  mean_point *= 1.0/sz;
-  // ROS_DEBUG_STREAM( sz << " "
-  //                  << mean_point[0] << " "
-  //                  << mean_point[1] << " "
-  //                  << mean_point[2]);
-  center.x = mean_point[0];
-  center.y = mean_point[1];
-  center.z = mean_point[2];
+  // static pcl_visualization::CloudViewer viewer("Simple Cloud Viewer");
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+  cv::Point3f center_est;
+  get3dCloud(image, disparity, rect, right_rect, f, T,
+             Z_min, Z_max, u0, v0, px, py,
+             pcl_cloud, center_est);
+  // std::cerr << "Cloud before filtering: " << std::endl;
+  // std::cerr << *pcl_cloud << std::endl;
+  float depth_density = 1.*pcl_cloud->points.size()/(rect.width*rect.height);
+
+  Eigen::Vector4f centroid (0., 0., 0., 0.);
+  Eigen::Vector4f min3d (0., 0., 0., 0.);
+  Eigen::Vector4f max3d (0., 0., 0., 0.);
+  if (pcl_cloud->points.size() >0)
+    {
+      cloud_pub_.publish(pcl_cloud);
+      pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+      sor.setInputCloud (pcl_cloud);
+      sor.setMeanK (50);
+      sor.setStddevMulThresh (1.0);
+      sor.filter (*cloud_filtered);
+      cloud_filtered->header.frame_id = "test";
+      cloud_filtered->header.stamp = leftImage_->header.stamp;
+      pcl::compute3DCentroid(*cloud_filtered, centroid);
+      pcl::getMinMax3D(*cloud_filtered, min3d, max3d);
+      // ROS_DEBUG_STREAM(rect.width << " " << rect.height
+      //                  << " " << depth_density
+      //                  << "\n" <<  min3d << "\n" << max3d);
+      cloud_pub_.publish(cloud_filtered);
+
+      //      viewer.showCloud(*cloud_filtered);
+    }
+  // std::cerr << "Cloud after filtering: " << std::endl;
+  // std::cerr << *cloud_filtered << std::endl;
+
+  center.x = centroid[0];
+  center.y = centroid[1];
+  center.z = centroid[2];
   center.x += object.anchor_x;
   center.y += object.anchor_y;
   center.z += object.anchor_z;
 
   // Fill blob.
-  blob.position.transform.translation.x = center.x;
-  blob.position.transform.translation.y = center.y;
-  blob.position.transform.translation.z = center.z;
+  blob.cloud_centroid.transform.translation.x = center.x;
+  blob.cloud_centroid.transform.translation.y = center.y;
+  blob.cloud_centroid.transform.translation.z = center.z;
+  blob.cloud_centroid.transform.rotation.x = 0.;
+  blob.cloud_centroid.transform.rotation.y = 0.;
+  blob.cloud_centroid.transform.rotation.z = 0.;
+  blob.cloud_centroid.transform.rotation.w = 0.;
+
+  blob.position.transform.translation.x = center_est.x;
+  blob.position.transform.translation.y = center_est.y;
+  blob.position.transform.translation.z = center_est.z;
   blob.position.transform.rotation.x = 0.;
   blob.position.transform.rotation.y = 0.;
   blob.position.transform.rotation.z = 0.;
   blob.position.transform.rotation.w = 0.;
+  blob.depth_density = depth_density;
   return blob;
 }
 

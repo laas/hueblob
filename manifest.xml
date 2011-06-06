@@ -11,6 +11,9 @@
 
   <depend package="std_msgs"/>
   <depend package="pcl"/>
+  <depend package="pcl_ros"/>
+  <!-- <depend package="pcl_visualization"/> -->
+  <depend package="eigen"/>
   <depend package="roscpp"/>
   <depend package="sensor_msgs"/>
   <depend package="stereo_msgs"/>

@@ -170,7 +170,7 @@ protected:
   /// This topic provides information about tracked blob position
   /// asynchronously.
   ros::Publisher blobs_pub_;
-
+  ros::Publisher cloud_pub_;
   /// Resulting tracked images
   image_transport::Publisher tracked_left_pub_;
   image_transport::Publisher tracked_right_pub_;
@@ -190,7 +190,8 @@ protected:
   /// \brief Object database.
   ///
   /// This associates each object name to its definition.
-  std::map<std::string, Object> objects_;
+  std::map<std::string, Object> left_objects_;
+  std::map<std::string, Object> right_objects_;
 
   /// \brief Timer used to periodically report bad synchronization.
   ros::WallTimer check_synced_timer_;

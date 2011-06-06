@@ -252,7 +252,8 @@ Object::track_camshift(const cv::Mat& image)
 
   cv::TermCriteria criteria =
     cv::TermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
-
+  // std::cout << searchWindow_.width << " "
+  //           << searchWindow_.height<< std::endl;
   result = cv::CamShift(backProject, searchWindow_, criteria);
   searchWindow_ = result->boundingRect();
 
