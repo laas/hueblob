@@ -10,6 +10,7 @@
   <url>http://ros.org/wiki/hueblob</url>
 
   <depend package="std_msgs"/>
+  <depend package="yaml_cpp"/>
   <depend package="pcl"/>
   <depend package="pcl_ros"/>
   <!-- <depend package="pcl_visualization"/> -->

@@ -215,6 +215,8 @@ protected:
 
   /// blob dectection algorithm to be used
   std::string algo_;
+  /// yaml filename that contains preloaded models
+  std::string preload_models_;
 };
 
 #endif //! HUEBLOB_HUEBLOB_H

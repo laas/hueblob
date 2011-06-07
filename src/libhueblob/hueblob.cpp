@@ -23,8 +23,21 @@
 #include "pcl/filters/statistical_outlier_removal.h"
 //#include <pcl_visualization/cloud_viewer.h>
 #include <Eigen/Dense>
+#include <fstream>
+#include <yaml-cpp/yaml.h>
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
+
+struct YamlModel {
+  std::string name;
+  std::string path;
+};
+
+void operator >> (const YAML::Node& node, YamlModel& model) {
+   node["name"] >> model.name;
+   node["path"] >> model.path;
+}
+
 
 HueBlob::HueBlob()
   : nh_("hueblob"),
@@ -57,12 +70,13 @@ HueBlob::HueBlob()
     leftImage_(),
     rightImage_(),
     leftCamera_(),
-    disparity_()
+    disparity_(),
+    preload_models_()
 {
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<std::string>("~algo", algo_, "camshift");
-  ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
+  ros::param::param<std::string>("~models", preload_models_, "");
   ros::param::param<double>("threshold", threshold_, 75.);
 
   tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 1);
@@ -110,6 +124,8 @@ HueBlob::spin()
       for (  std::vector<hueblob::Blob>::iterator iter= blobs.blobs.begin();
              iter != blobs.blobs.end(); iter++ )
         {
+          if (!leftImage_ || !rightImage_)
+            break;
           int x =  (*iter).boundingbox_2d[0];
           int y =  (*iter).boundingbox_2d[1];
           int width =  (*iter).boundingbox_2d[2];
@@ -208,6 +224,54 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 	   left_topic.c_str(), left_camera_topic.c_str(),
 	   right_topic.c_str(), right_camera_topic.c_str(),
 	   disparity_topic.c_str());
+  if (preload_models_ != "")
+    {
+    try
+      {
+        std::ifstream fin(preload_models_.c_str());
+        YAML::Parser parser(fin);
+        YAML::Node doc;
+        parser.GetNextDocument(doc);
+        for(unsigned i=0;i<doc.size();i++) {
+          YamlModel yaml_model;
+          doc[i] >> yaml_model;
+          ROS_INFO_STREAM("Addiing "<< yaml_model.name << " " << yaml_model.path);
+            // Get reference on the object.
+
+          Object& left_object = left_objects_[yaml_model.name];
+          Object& right_object = right_objects_[yaml_model.name];
+          if (algo_ == "naive")
+            {
+              left_object.algo = NAIVE;
+              right_object.algo = NAIVE;
+            }
+          else if (algo_ == "camshift")
+            {
+              left_object.algo = CAMSHIFT;
+              right_object.algo = CAMSHIFT;
+            }
+
+
+          // Emit a warning if the object already exists.
+          if (left_object.anchor_x
+              || left_object.anchor_y
+              || left_object.anchor_z)
+            ROS_WARN("Overwriting the object %s", yaml_model.name.c_str());
+          cv::Mat model = cv::imread(yaml_model.path);
+          // Add the view to the object.
+          left_object.addView(model);
+          // Add the view to the object.
+          right_object.addView(model);
+        }
+      }
+      catch(YAML::ParserException& e) {
+        ROS_FATAL_STREAM(e.what());
+      }
+
+
+      ROS_INFO_STREAM("parsed models: "<< preload_models_);
+    }
+
 }
 
 void
@@ -452,7 +516,9 @@ hueblob::Blob
 HueBlob::trackBlob(const std::string& name)
 {
   hueblob::Blob blob;
-
+  // Image acquisition.
+  if (!leftImage_ || !disparity_ || !rightImage_)
+    return blob;
   // Fill blob header.
   blob.name = name;
   blob.position.header = leftImage_->header;
@@ -460,10 +526,6 @@ HueBlob::trackBlob(const std::string& name)
   blob.boundingbox_2d.resize(4);
   for (unsigned i = 0; i < 4; ++i)
     blob.boundingbox_2d[i] = 0.;
-
-  // Image acquisition.
-  if (!leftImage_ || !disparity_)
-    return blob;
 
   // Realize 2d tracking in the image.
   Object& robject = right_objects_[name];

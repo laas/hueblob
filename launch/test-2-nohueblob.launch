@@ -33,10 +33,12 @@
   </group>
 
   <group if="$(optenv ENABLE_DISPLAY 0)">
+
     <node
        pkg="image_view"
-       type="stereo_view"
-       name="stereo_view"
-       args="stereo:=/wide_sync image:=image_rect_color"/>
+       type="image_view"
+       name="image_view"
+       args="image:=/hueblob/tracked/left/image_rec_color"
+       respawn="true" />
   </group>
 </launch>
