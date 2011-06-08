@@ -376,20 +376,68 @@ HueBlob::TrackObjectCallback(hueblob::TrackObject::Request& request,
 namespace
 {
 
+  inline void projectTo3d(float u, float v, float disparity,
+                          const stereo_msgs::DisparityImage &disparity_image,
+                          const sensor_msgs::CameraInfo &camera_info,
+                          float &x, float &y, float &z,
+                          bool shift_correction = false)
+  {
+    if (shift_correction)
+      {
+        // account for the fact the center point of the image is not the
+        // principal point
+        // not sure if this is really correct or more of a hack, but
+        // without this the image
+        // ends up shifted
+        u = u - (disparity_image.image.width/2  - camera_info.P[0*4+2]);
+        v = v - (disparity_image.image.height/2 - camera_info.P[1*4+2]);
+      }
+
+    float fx = camera_info.P[0*4+0];
+    float fy = camera_info.P[1*4+1];
+    float cx = camera_info.P[0*4+2];
+    float cy = camera_info.P[1*4+2];
+    float Tx = camera_info.P[0*4+3];
+    float Ty = camera_info.P[1*4+3];
+
+    x = ( (u - cx - Tx) / fx );
+    y = ( (v - cy - Ty) / fy );
+    z = ( 1.0 );
+    float norm = sqrt(x*x + y*y + 1);
+    float depth = disparity_image.f * disparity_image.T / disparity;
+    x = ( depth * x / norm );
+    y = ( depth * y / norm );
+    z = ( depth * z / norm );
+  }
+
+  //! Check if a disparity image as a valid value at given image coordinates
+  inline bool hasDisparityValue(const stereo_msgs::DisparityImage
+                                &disparity_image, unsigned int h, unsigned int w)
+  {
+    ROS_ASSERT(h<disparity_image.image.height && w<disparity_image.image.width);
+    float val;
+    memcpy(&val, &(disparity_image.image.data.at(
+                                                 h*disparity_image.image.step
+                                                 + sizeof(float)*w )), sizeof(float));
+    if (std::isnan(val) || std::isinf(val)) return false;
+    if (val < disparity_image.min_disparity || val >
+        disparity_image.max_disparity) return false;
+    return true;
+  }
+  //! Get the value from an image at given image coordinates as a float
+  inline void getPoint(const sensor_msgs::Image &image, unsigned int h,
+                       unsigned int w, float &val)
+  {
+    ROS_ASSERT(h<image.height && w<image.width);
+    memcpy(&val, &(image.data.at( h*image.step + sizeof(float)*w )),
+           sizeof(float));
+  }
 
 
-  void get3dCloud(const cv::Mat& image,
-                  const cv::Mat& disparity,
+  void get3dCloud(const stereo_msgs::DisparityImage &disparity_image,
+                  const sensor_msgs::CameraInfo &camera_info,
                   cv::Rect& rect,
                   cv::Rect& right_rect,
-                  const double f,
-                  const double T,
-                  const double Z_min,
-                  const double Z_max,
-                  const double u0,
-                  const double v0,
-                  const double px,
-                  const double py,
                   pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud,
                   cv::Point3f& center_est
                   )
@@ -427,99 +475,36 @@ namespace
     else
       {
         //ROS_DEBUG_STREAM(right_center << " " << left_center << " ");
-        rect.x = std::max(0, rect.x);
-        rect.y = std::max(0, rect.y);
-        rect.width = std::min(disparity.rows, rect.width);
-        rect.height = std::min(disparity.cols, rect.height);
-        float d = left_center.x - right_center.x;
-        double x = left_center.x;
-        double y = left_center.y;
-        center_est.x = (x - u0) / px;
-        center_est.y = (y - v0) / py;
-        center_est.z = (1.0*f * T / d);
+        float disparity = left_center.x - right_center.x;
+        int i = rect.y;
+        int j = rect.x;
+        float x, y, z;
+        projectTo3d(j, i, disparity,  disparity_image,
+                    camera_info, x, y, z, true);
+        center_est.x = x;
+        center_est.y = y;
+        center_est.z = z;
         // ROS_DEBUG_STREAM(left_center << " "
         //                  << right_center << " "
         //                  << center_est);
       }
-    for (int y = rect.y; y < rect.y + rect.height; ++y)
-      for (int x = rect.x; x < rect.x + rect.width; ++x)
-	{
-	  unsigned char d = disparity.at<unsigned char>(y, x);
-	  //FIXME: check transformation.
-	  double X = (x - u0) / px;
-	  double Y = (y - v0) / py;
-	  double Z = (d > 0) ? (1.0*f * T / d) : 0.;
-
-	  // If the point is not part of the horopter, ignore it.
-	  if (Z < Z_min || Z > Z_max)
-	    continue;
-          pcl::PointXYZ point(X,Y,Z);
+    for (int i = rect.y; i < rect.y + rect.height; ++i)
+      for (int j = rect.x; j < rect.x + rect.width; ++j)
+        {
+          if (!hasDisparityValue(disparity_image, i, j))
+            continue;
+          float disparity, x, y, z;
+          getPoint(disparity_image.image, i, j, disparity);
+          ROS_ASSERT(disparity_image.max_disparity != 0.0);
+          if (disparity == 0)
+            continue;
+          projectTo3d(j, i, disparity,  disparity_image,
+                      camera_info, x, y, z, true);
+          pcl::PointXYZ point(x,y,z);
           pcl_cloud->points.push_back(point);
         }
   }
 
-  //FIXME: this is not as good as the original hueblob...
-  void get3dBox(const cv::Mat& image,
-		const cv::Mat& disparity,
-		cv::Rect& rect,
-		const double f,
-		const double T,
-		const double Z_min,
-		const double Z_max,
-		const double u0,
-		const double v0,
-		const double px,
-		const double py,
-		cv::Point3d& min,
-		cv::Point3d& max,
-		cv::Point3d& center)
-  {
-    // Make sure the rectangle is valid.
-
-    rect.x = std::max(0, rect.x);
-    rect.y = std::max(0, rect.y);
-    rect.width = std::min(disparity.rows, rect.width);
-    rect.height = std::min(disparity.cols, rect.height);
-    for (int y = rect.y; y < rect.y + rect.height; ++y)
-      for (int x = rect.x; x < rect.x + rect.width; ++x)
-	{
-	  unsigned char d = disparity.at<unsigned char>(y, x);
-	  //FIXME: check transformation.
-	  double X = (x - u0) / px;
-	  double Y = (y - v0) / py;
-	  double Z = (d > 0) ? (1.0*f * T / d) : 0.;
-	  cv::Point3d p(X, Y, Z);
-
-	  // If the point is not part of the horopter, ignore it.
-	  if (Z < Z_min || Z > Z_max)
-            // ROS_DEBUG_STREAM_THROTTLE(0.2,"x=" << x
-            //                           << " y=" << y
-            //                           << " d=" << static_cast<int>(d)
-            //                           << "\nignoring: Z=" << Z
-            //                           << " Z_min=" << Z_min
-            //                           << " Z_max=" << Z_max);
-	    continue;
-
-	  // Update extrema.
-	  if (p.x < min.x)
-	    min.x = p.x;
-	  if (p.y < min.y)
-	    min.y = p.y;
-	  if (p.z < min.z)
-	    min.z = p.z;
-
-	  if (p.x > max.x)
-	    max.x = p.x;
-	  if (p.y > max.y)
-	    max.y = p.y;
-	  if (p.z > max.z)
-	    max.z = p.z;
-          //ROS_DEBUG_STREAM(p.x << " " << p.y << " " << p.z);
-	}
-    center.x = std::fabs(max.x - min.x) / 2.;
-    center.y = std::fabs(max.y - min.y) / 2.;
-    center.z = std::fabs(max.z - min.z) / 2.;
-  }
 } // end of anonymous namespace.
 
 hueblob::Blob
@@ -567,29 +552,14 @@ HueBlob::trackBlob(const std::string& name)
       return blob;
     }
 
-  // Convert disparity to OpenCV image.
-  boost::shared_ptr<const sensor_msgs::Image> imagePtr
-    (&disparity_->image, nullDeleterConst);
-  cv::Mat disparity(bridgeDisparity_.imgMsgToCv(imagePtr, "mono8"), false);
 
-  // Compute 3d box.
-  const double f = disparity_->f;
-  const double T = disparity_->T;
-  const double Z_min = f * T / disparity_->max_disparity;
-  const double Z_max = f * T / disparity_->min_disparity;
-  const double u0 = leftCamera_->K[0 * 3 + 0];
-  const double v0 = leftCamera_->K[1 * 3 + 1];
-  const double px = leftCamera_->K[0 * 3 + 2];
-  const double py = leftCamera_->K[1 * 3 + 2];
-  cv::Point3d min;
-  cv::Point3d max;
   cv::Point3d center;
   // static pcl_visualization::CloudViewer viewer("Simple Cloud Viewer");
   pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
   cv::Point3f center_est;
-  get3dCloud(image, disparity, rect, right_rect, f, T,
-             Z_min, Z_max, u0, v0, px, py,
+  get3dCloud(*disparity_, *leftCamera_,
+             rect, right_rect,
              pcl_cloud, center_est);
   // std::cerr << "Cloud before filtering: " << std::endl;
   // std::cerr << *pcl_cloud << std::endl;

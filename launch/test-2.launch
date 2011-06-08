@@ -14,13 +14,6 @@
     <param name="out" value="/wide_sync" />
   </node>
 
-  <node
-     pkg="image_view"
-     type="image_view"
-     name="image_view"
-     args="image:=/hueblob/tracked/left/image_rec_color"
-     respawn="true" >
-  </node>
 
   <node
      ns="/wide_sync"
