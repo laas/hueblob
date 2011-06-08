@@ -405,11 +405,21 @@ namespace
 
     // Make sure the rectangle is valid.
     // check if the size of two rect are not too different
-    if (std::fabs(right_center.y - left_center.y) > 3 ||
-        1.0*(rect.width/right_rect.width) > 1.5 ||
-        1.0*(rect.width/right_rect.width) < 0.5
+    double diffy = double(right_center.y - left_center.y);
+    if ( diffy > 3 || diffy < -3 ||
+         (1.0*rect.width/float(right_rect.width)) > 1.5 ||
+         (1.0*rect.width/float(right_rect.width)) < 0.5
         )
       {
+        ROS_DEBUG_STREAM("object on left and right cam not aligned"
+                         << " or too different in size"
+                         << "\nright_center.y - left_center.y = " << diffy
+                         );
+        ROS_DEBUG_STREAM("\nleft: "  << left_center  << " "<< rect.width
+                         << " " << rect.height
+                         << "\nright: " << right_center << " "<< right_rect.width
+                         << " " << right_rect.height
+                         );
         center_est.x = 0;
         center_est.y = 0;
         center_est.z = 0;
@@ -536,7 +546,7 @@ HueBlob::trackBlob(const std::string& name)
   Object& object = left_objects_[name];
   cv::Mat image(bridgeLeft_.imgMsgToCv(leftImage_, "bgr8"), false);
   boost::optional<cv::RotatedRect> rrect = object.track(image);
-  if (!rrect || !right_rrect)
+  if (!rrect)
     {
       ROS_WARN_THROTTLE(20, "failed to track object");
       return blob;
