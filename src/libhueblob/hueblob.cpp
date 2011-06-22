@@ -416,7 +416,8 @@ namespace
   inline bool hasDisparityValue(const stereo_msgs::DisparityImage
                                 &disparity_image, unsigned int h, unsigned int w)
   {
-    ROS_ASSERT(h<disparity_image.image.height && w<disparity_image.image.width);
+    if (h>= disparity_image.image.height && w >= disparity_image.image.width) 
+      return false;
     float val;
     memcpy(&val, &(disparity_image.image.data.at(
                                                  h*disparity_image.image.step
