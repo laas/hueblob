@@ -489,7 +489,7 @@ namespace
     // Make sure the rectangle is valid.
     // check if the size of two rect are not too different
     double diffy = double(right_center.y - left_center.y);
-    if ( diffy > 3 || diffy < -3 ||
+    if ( diffy > 10 || diffy < -10 ||
          (1.0*rect.width/float(right_rect.width)) > 1.5 ||
          (1.0*rect.width/float(right_rect.width)) < 0.5
         )
