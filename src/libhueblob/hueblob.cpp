@@ -50,16 +50,6 @@ HueBlob::HueBlob()
     right_sub_(),
     disparity_sub_(),
     sync_(3),
-    blobs_pub_(nh_.advertise<hueblob::Blobs>("blobs", 5)),
-    cloud_pub_(nh_.advertise<pcl::PointCloud<pcl::PointXYZ> > ("points2", 1)),
-    AddObject_srv_(nh_.advertiseService
-		   ("add_object", &HueBlob::AddObjectCallback, this)),
-    ListObject_srv_(nh_.advertiseService
-		    ("list_object", &HueBlob::ListObjectCallback, this)),
-    RmObject_srv_(nh_.advertiseService
-		  ("rm_object", &HueBlob::RmObjectCallback, this)),
-    TrackObject_srv_(nh_.advertiseService
-		   ("track_object", &HueBlob::TrackObjectCallback, this)),
     left_objects_(),
     right_objects_(),
     check_synced_timer_(),
@@ -79,9 +69,39 @@ HueBlob::HueBlob()
   ros::param::param<std::string>("~models", preload_models_, "");
   ros::param::param<double>("threshold", threshold_, 75.);
 
-  tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 1);
-  tracked_right_pub_ = it_.advertise("/hueblob/tracked/right/image_rec_color", 1);
+  const std::string tracked_image_topic =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/tracked/image_rect_color");
+  
+  tracked_left_pub_ = it_.advertise(tracked_image_topic, 1);
+  // tracked_right_pub_ = it_.advertise("tracked/right/image_rec_color", 1);
 
+  const std::string blobs_topic =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
+  blobs_pub_ = nh_.advertise<hueblob::Blobs>(blobs_topic, 5);
+
+  const std::string points2_topic =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/points2");
+  cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZ> > (points2_topic, 1);
+
+  const std::string add_object_service =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/add_object");
+  AddObject_srv_ = nh_.advertiseService(add_object_service, 
+					&HueBlob::AddObjectCallback, this);
+
+  const std::string list_objects_service =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/list_objects");
+  ListObject_srv_  = nh_.advertiseService(list_objects_service, 
+					  &HueBlob::ListObjectCallback, this);
+
+  const std::string rm_object_service =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/rm_objects");
+  RmObject_srv_ = nh_.advertiseService(rm_object_service, 
+				       &HueBlob::RmObjectCallback, this);
+
+  const std::string track_object_service =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/track_object");
+  TrackObject_srv_ = nh_.advertiseService(track_object_service, 
+					  &HueBlob::TrackObjectCallback, this);
 
   // Initialize the node subscribers, publishers and filters.
   setupInfrastructure(stereo_topic_prefix_);
