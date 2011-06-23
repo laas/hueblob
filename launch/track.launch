@@ -1,0 +1,25 @@
+<launch>
+ <include file="$(env ROBOT_PKG)/launch/config.launch"/>
+
+  <node
+     machine="hrp2v"
+     pkg="hueblob"
+     type="hueblob_node"
+     name="hueblob_node_narrow"
+     respawn="true">
+    <param name="stereo" value="/narrow" />
+    <param name="models" value="/home/nddang/src/ros/hueblob/data/models.yaml" />
+    </node>
+
+  <node
+     machine="hrp2v"
+     pkg="hueblob"
+     type="hueblob_node"
+     name="hueblob_node_wide"
+     respawn="true">
+    <param name="stereo" value="/wide" />
+    <param name="models" value="/home/nddang/src/ros/hueblob/data/models.yaml" />
+    </node>
+
+
+</launch>
