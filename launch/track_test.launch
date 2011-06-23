@@ -1,6 +1,4 @@
 <launch>
- <include file="$(env ROBOT_PKG)/launch/config.launch"/>
-
   <node
      pkg="hueblob"
      type="hueblob_node"
