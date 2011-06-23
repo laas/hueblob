@@ -2,7 +2,6 @@
  <include file="$(env ROBOT_PKG)/launch/config.launch"/>
 
   <node
-     machine="hrp2v"
      pkg="hueblob"
      type="hueblob_node"
      name="hueblob_node_narrow"
@@ -13,7 +12,6 @@
     </node>
 
   <node
-     machine="hrp2v"
      pkg="hueblob"
      type="hueblob_node"
      name="hueblob_node_wide"

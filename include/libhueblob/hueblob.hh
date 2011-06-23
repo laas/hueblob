@@ -18,6 +18,7 @@
 // Message filters.
 # include <message_filters/subscriber.h>
 # include <message_filters/sync_policies/exact_time.h>
+# include <message_filters/sync_policies/approximate_time.h>
 # include <message_filters/synchronizer.h>
 
 // Messages.
@@ -84,7 +85,7 @@ protected:
   bool AddObjectCallback(hueblob::AddObject::Request& request,
 			 hueblob::AddObject::Response& response);
 
-  /// \brief ListObject service callback.
+
   bool ListObjectCallback(hueblob::ListObject::Request& request,
 			  hueblob::ListObject::Response& response);
 
@@ -117,7 +118,16 @@ protected:
    sensor_msgs::CameraInfo,
    stereo_msgs::DisparityImage
    >
-    SyncPolicy_t;
+    ExactPolicy;
+
+  typedef message_filters::sync_policies::ApproximateTime<
+   sensor_msgs::Image,
+   sensor_msgs::CameraInfo,
+   sensor_msgs::Image,
+   sensor_msgs::CameraInfo,
+   stereo_msgs::DisparityImage
+   >
+    ApproximatePolicy;
 
   /// \brief ROS node handle created at start-up.
   ros::NodeHandle nh_;
@@ -163,7 +173,8 @@ protected:
   ///
   /// This time synchronizer makes sure that both the left image,
   /// right image the disparity are received synchronously.
-  message_filters::Synchronizer<SyncPolicy_t> sync_;
+  message_filters::Synchronizer<ExactPolicy> exact_sync_;
+  message_filters::Synchronizer<ApproximatePolicy> approximate_sync_;
 
   /// \brief Blobs topic publisher.
   ///
@@ -217,6 +228,10 @@ protected:
   std::string algo_;
   /// yaml filename that contains preloaded models
   std::string preload_models_;
+
+  /// approximate sync for image messages
+  bool is_approximate_sync_;
+
 };
 
 #endif //! HUEBLOB_HUEBLOB_H

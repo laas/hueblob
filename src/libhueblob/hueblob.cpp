@@ -49,7 +49,8 @@ HueBlob::HueBlob()
     left_sub_(),
     right_sub_(),
     disparity_sub_(),
-    sync_(3),
+    exact_sync_(3),
+    approximate_sync_(3),
     blobs_pub_(nh_.advertise<hueblob::Blobs>("blobs", 5)),
     cloud_pub_(nh_.advertise<pcl::PointCloud<pcl::PointXYZ> > ("points2", 1)),
     AddObject_srv_(nh_.advertiseService
@@ -77,6 +78,7 @@ HueBlob::HueBlob()
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<std::string>("~algo", algo_, "camshift");
   ros::param::param<std::string>("~models", preload_models_, "");
+  ros::param::param<bool>("~approximate_sync", is_approximate_sync_, false);
   ros::param::param<double>("threshold", threshold_, 75.);
 
   tracked_left_pub_ = it_.advertise("/hueblob/tracked/left/image_rec_color", 1);
@@ -138,7 +140,7 @@ HueBlob::spin()
           //                  << " " << width << " " << height);
           cv::rectangle(img, p1, p2, color, 1);
           stringstream ss (stringstream::in | stringstream::out);
-	  cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX, 
+	  cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX,
 		      0.5, color);
           // boost::format fmter("[%3.3f %3.3f %3.3f %1.2f]");
           // (fmter % (*iter).cloud_centroid.transform.translation.x
@@ -201,22 +203,32 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
   disparity_sub_.subscribe(nh_, disparity_topic, 3);
 
   //FIXME: is it needed to be reentrant?
-  //sync_.disconnectAll();
-  sync_.connectInput(left_sub_, leftCamera_sub_,
-		     right_sub_, rightCamera_sub_,
-		     disparity_sub_);
-  sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
+  //exact_sync_.disconnectAll();
+  if (is_approximate_sync_)
+    {
+      approximate_sync_.connectInput(left_sub_, leftCamera_sub_,
+                                     right_sub_, rightCamera_sub_,
+                                     disparity_sub_);
+      approximate_sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
+				     this, _1, _2, _3, _4, _5));
+    }
+  else
+    {
+      exact_sync_.connectInput(left_sub_, leftCamera_sub_,
+                               right_sub_, rightCamera_sub_,
+                               disparity_sub_);
+      exact_sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
 				     this, _1, _2, _3, _4, _5));
 
-  // Complain every 30s if the topics appear unsynchronized
-  left_sub_.registerCallback(boost::bind(increment, &left_received_));
-  right_sub_.registerCallback(boost::bind(increment, &right_received_));
-  disparity_sub_.registerCallback(boost::bind(increment, &disp_received_));
-  sync_.registerCallback(boost::bind(increment, &all_received_));
-  check_synced_timer_ =
-    nh_.createWallTimer(ros::WallDuration(30.0),
+      // Complain every 30s if the topics appear unsynchronized
+      left_sub_.registerCallback(boost::bind(increment, &left_received_));
+      right_sub_.registerCallback(boost::bind(increment, &right_received_));
+      disparity_sub_.registerCallback(boost::bind(increment, &disp_received_));
+      exact_sync_.registerCallback(boost::bind(increment, &all_received_));
+      check_synced_timer_ =
+        nh_.createWallTimer(ros::WallDuration(30.0),
 			boost::bind(&HueBlob::checkInputsSynchronized, this));
-
+    }
   ROS_INFO("Subscribing to:\n"
 	   "\t* %s\n"
 	   "\t* %s\n"
@@ -416,7 +428,7 @@ namespace
   inline bool hasDisparityValue(const stereo_msgs::DisparityImage
                                 &disparity_image, unsigned int h, unsigned int w)
   {
-    if (h>= disparity_image.image.height && w >= disparity_image.image.width) 
+    if (h>= disparity_image.image.height && w >= disparity_image.image.width)
       return false;
     float val;
     memcpy(&val, &(disparity_image.image.data.at(
