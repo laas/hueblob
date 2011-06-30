@@ -133,10 +133,6 @@ HueBlob::spin()
         img = bridgeLeft_.imgMsgToCv(leftImage_, "bgr8");
 
 
-      //FIXME: currently iterate on all blobs.
-      // Should we prune untrackable blobs?
-      // Should we provide a way to disable tracking
-      //  for some objects?
       BOOST_FOREACH(iterator_t it, left_objects_)
 	{
 	  hueblob::Blob blob = trackBlob(it.first);
@@ -156,8 +152,8 @@ HueBlob::spin()
           cv::Point p2(x + width, y + height);
           cv::Point pc(x, y + std::max(16, height+8));
           const cv::Scalar color = CV_RGB(255,0,0);
-          // ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
-          //                  << " " << width << " " << height);
+          ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
+                           << " " << width << " " << height);
           cv::rectangle(img, p1, p2, color, 1);
           stringstream ss (stringstream::in | stringstream::out);
 	  cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX,
@@ -185,6 +181,8 @@ HueBlob::spin()
         brd_im.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
         tracked_left_pub_.publish(brd_im.toImageMsg());
       }
+      else
+        ROS_WARN_THROTTLE(20,"leftImage_ is not received");
 
       blobs_pub_.publish(blobs);
       ros::spinOnce();
@@ -222,8 +220,6 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
   rightCamera_sub_.subscribe(nh_, right_camera_topic, 3);
   disparity_sub_.subscribe(nh_, disparity_topic, 3);
 
-  //FIXME: is it needed to be reentrant?
-  //exact_sync_.disconnectAll();
   if (is_approximate_sync_)
     {
       approximate_sync_.connectInput(left_sub_, leftCamera_sub_,
@@ -231,6 +227,7 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
                                      disparity_sub_);
       approximate_sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
 				     this, _1, _2, _3, _4, _5));
+      ROS_INFO("Starting in approximate_sync mode");
     }
   else
     {
@@ -240,6 +237,7 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
       exact_sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
 				     this, _1, _2, _3, _4, _5));
 
+      ROS_INFO("Starting in exact_sync mode");
       // Complain every 30s if the topics appear unsynchronized
       left_sub_.registerCallback(boost::bind(increment, &left_received_));
       right_sub_.registerCallback(boost::bind(increment, &right_received_));
@@ -269,7 +267,7 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
         for(unsigned i=0;i<doc.size();i++) {
           YamlModel yaml_model;
           doc[i] >> yaml_model;
-          ROS_INFO_STREAM("Addiing "<< yaml_model.name << " " << yaml_model.path);
+          ROS_INFO_STREAM("Adding "<< yaml_model.name << " " << yaml_model.path);
             // Get reference on the object.
 
           Object& left_object = left_objects_[yaml_model.name];
@@ -315,6 +313,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::CameraInfoConstPtr& right_camera,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
+  ROS_DEBUG_STREAM_THOTTLE(1, "imageCallback");
   leftImage_ = left;
   rightImage_ = right;
   leftCamera_ = left_camera;
@@ -548,7 +547,13 @@ HueBlob::trackBlob(const std::string& name)
   hueblob::Blob blob;
   // Image acquisition.
   if (!leftImage_ || !disparity_ || !rightImage_)
-    return blob;
+    {
+      ROS_WARN_STREAM_THROTTLE(1, "At least one of leftImage_ || disparity_ "
+                               "|| rightImage_ is missing. Aborting tracking"
+                               << leftImage_ << " " << rightImage_ << " "
+                               << disparity_);
+      return blob;
+    }
   // Fill blob header.
   blob.name = name;
   blob.position.header = leftImage_->header;
@@ -615,12 +620,13 @@ HueBlob::trackBlob(const std::string& name)
       cloud_filtered->header.stamp = leftImage_->header.stamp;
       pcl::compute3DCentroid(*cloud_filtered, centroid);
       pcl::getMinMax3D(*cloud_filtered, min3d, max3d);
-      // ROS_DEBUG_STREAM(rect.width << " " << rect.height
-      //                  << " " << depth_density
-      //                  << "\n" <<  min3d << "\n" << max3d);
       cloud_pub_.publish(cloud_filtered);
-
-      //      viewer.showCloud(*cloud_filtered);
+      blob.boundingbox_3d[0] = min3d[0];
+      blob.boundingbox_3d[1] = min3d[1];
+      blob.boundingbox_3d[2] = min3d[2];
+      blob.boundingbox_3d[3] = max3d[0];
+      blob.boundingbox_3d[4] = max3d[1];
+      blob.boundingbox_3d[5] = max3d[2];
     }
   // std::cerr << "Cloud after filtering: " << std::endl;
   // std::cerr << *cloud_filtered << std::endl;
@@ -639,7 +645,8 @@ HueBlob::trackBlob(const std::string& name)
   blob.cloud_centroid.transform.rotation.x = 0.;
   blob.cloud_centroid.transform.rotation.y = 0.;
   blob.cloud_centroid.transform.rotation.z = 0.;
-  blob.cloud_centroid.transform.rotation.w = 0.;
+  blob.cloud_centroid.transform.rotation.w = 1.;
+  blob.cloud_centroid.header.stamp = leftImage_->header.stamp;
 
   blob.position.transform.translation.x = center_est.x;
   blob.position.transform.translation.y = center_est.y;
@@ -647,7 +654,10 @@ HueBlob::trackBlob(const std::string& name)
   blob.position.transform.rotation.x = 0.;
   blob.position.transform.rotation.y = 0.;
   blob.position.transform.rotation.z = 0.;
-  blob.position.transform.rotation.w = 0.;
+  blob.position.transform.rotation.w = 1.;
+  blob.position.header.stamp = leftImage_->header.stamp;
+
+
   blob.depth_density = depth_density;
   return blob;
 }

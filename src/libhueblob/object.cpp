@@ -125,13 +125,13 @@ Object::getThresholds(const cv::Mat& hsv_img)
   // lower[2]/= tol;
   // upper[1]*= tol;
   // upper[2]*= tol;
-  std::cout << maxIdx << " " << std::endl;
-  std::cout << lower_hue[0] << " "
-            << lower_hue[1] << " "
-            << lower_hue[2] << " " << std::endl;
-  std::cout << upper_hue[0] << " "
-            << upper_hue[1] << " "
-            << upper_hue[2] << " " << std::endl;
+  // std::cout << maxIdx << " " << std::endl;
+  // std::cout << lower_hue[0] << " "
+  //           << lower_hue[1] << " "
+  //           << lower_hue[2] << " " << std::endl;
+  // std::cout << upper_hue[0] << " "
+  //           << upper_hue[1] << " "
+  //           << upper_hue[2] << " " << std::endl;
 }
 
 namespace

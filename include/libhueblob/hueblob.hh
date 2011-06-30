@@ -128,6 +128,9 @@ protected:
    stereo_msgs::DisparityImage
    >
     ApproximatePolicy;
+  typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
+  typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
+
 
   /// \brief ROS node handle created at start-up.
   ros::NodeHandle nh_;
@@ -173,8 +176,8 @@ protected:
   ///
   /// This time synchronizer makes sure that both the left image,
   /// right image the disparity are received synchronously.
-  message_filters::Synchronizer<ExactPolicy> exact_sync_;
-  message_filters::Synchronizer<ApproximatePolicy> approximate_sync_;
+  ExactSync exact_sync_;
+  ApproximateSync approximate_sync_;
 
   /// \brief Blobs topic publisher.
   ///
