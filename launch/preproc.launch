@@ -19,10 +19,11 @@
      type="stereo_image_proc"
      name="stereo_image_proc_narrow"
      respawn="true" >
-    <param name="approximate_sync" value="True" />
     <param name="min_disparity" value="20" />
     <param name="disparity_range" value="128" />
     <param name="correletion_window_size" value="15" />
+    <param name="queue_size" value="5" />
+    <param name="approximate_sync" value="True" />
 </node>
 
   <!-- optional visualization tools -->
