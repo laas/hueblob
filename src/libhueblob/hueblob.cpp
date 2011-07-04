@@ -71,11 +71,6 @@ HueBlob::HueBlob()
   ros::param::param<bool>("~approximate_sync", is_approximate_sync_, false);
   ros::param::param<double>("threshold", threshold_, 75.);
 
-  const std::string tracked_image_topic =
-    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/tracked/image_rect_color");
-
-  tracked_left_pub_ = it_.advertise(tracked_image_topic, 1);
-  // tracked_right_pub_ = it_.advertise("tracked/right/image_rec_color", 1);
 
   const std::string blobs_topic =
     ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
@@ -107,8 +102,6 @@ HueBlob::HueBlob()
 
   // Initialize the node subscribers, publishers and filters.
   setupInfrastructure(stereo_topic_prefix_);
-
-
 }
 
 HueBlob::~HueBlob()
@@ -128,61 +121,12 @@ HueBlob::spin()
   while (ros::ok())
     {
       hueblob::Blobs blobs;
-
-      if (leftImage_)
-        img = bridgeLeft_.imgMsgToCv(leftImage_, "bgr8");
-
-
       BOOST_FOREACH(iterator_t it, left_objects_)
 	{
 	  hueblob::Blob blob = trackBlob(it.first);
 	  blobs.blobs.push_back(blob);
 	}
 
-      for (  std::vector<hueblob::Blob>::iterator iter= blobs.blobs.begin();
-             iter != blobs.blobs.end(); iter++ )
-        {
-          if (!leftImage_ || !rightImage_)
-            break;
-          int x =  (*iter).boundingbox_2d[0];
-          int y =  (*iter).boundingbox_2d[1];
-          int width =  (*iter).boundingbox_2d[2];
-          int height =  (*iter).boundingbox_2d[3];
-          cv::Point p1(x, y);
-          cv::Point p2(x + width, y + height);
-          cv::Point pc(x, y + std::max(16, height+8));
-          const cv::Scalar color = CV_RGB(255,0,0);
-          ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
-                           << " " << width << " " << height);
-          cv::rectangle(img, p1, p2, color, 1);
-          stringstream ss (stringstream::in | stringstream::out);
-	  cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX,
-		      0.5, color);
-          // boost::format fmter("[%3.3f %3.3f %3.3f %1.2f]");
-          // (fmter % (*iter).cloud_centroid.transform.translation.x
-          //  %  (*iter).cloud_centroid.transform.translation.y
-          //  %  (*iter).cloud_centroid.transform.translation.z
-          //  %  (*iter).depth_density
-          //  );
-          // cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
-
-          // boost::format fmter2("[%3.3f %3.3f %3.3f]");
-          // (fmter2 % (*iter).position.transform.translation.x
-          //  %  (*iter).position.transform.translation.y
-          //  %  (*iter).position.transform.translation.z
-          //  );
-          // cv::putText(img, fmter2.str(), pc, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
-        }
-
-      if (leftImage_){
-        cv_bridge::CvImage brd_im;
-        brd_im.image = img;
-        brd_im.header = leftImage_->header;
-        brd_im.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
-        tracked_left_pub_.publish(brd_im.toImageMsg());
-      }
-      else
-        ROS_WARN_THROTTLE(20,"leftImage_ is not received");
 
       blobs_pub_.publish(blobs);
       ros::spinOnce();
@@ -313,11 +257,20 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::CameraInfoConstPtr& right_camera,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
-  ROS_DEBUG_STREAM_THOTTLE(1, "imageCallback");
+  // ROS_DEBUG_STREAM_THROTTLE(1, "imageCallback");
   leftImage_ = left;
   rightImage_ = right;
   leftCamera_ = left_camera;
   disparity_ = disparity;
+  typedef std::pair<const std::string&, const Object&> iterator_t;
+
+  hueblob::Blobs blobs;
+  BOOST_FOREACH(iterator_t it, left_objects_)
+    {
+      hueblob::Blob blob = trackBlob(it.first);
+      blobs.blobs.push_back(blob);
+    }
+  blobs_pub_.publish(blobs);
 }
 
 bool
@@ -433,14 +386,11 @@ namespace
     float Tx = camera_info.P[0*4+3];
     float Ty = camera_info.P[1*4+3];
 
-    x = ( (u - cx - Tx) / fx );
-    y = ( (v - cy - Ty) / fy );
-    z = ( 1.0 );
-    float norm = sqrt(x*x + y*y + 1);
-    float depth = disparity_image.f * disparity_image.T / disparity;
-    x = ( depth * x / norm );
-    y = ( depth * y / norm );
-    z = ( depth * z / norm );
+    z = disparity_image.f * disparity_image.T / disparity;
+    x = ( (u - cx ) / fx );
+    x*= z;
+    y = ( (v - cy ) / fy );
+    y*= z;
   }
 
   //! Check if a disparity image as a valid value at given image coordinates

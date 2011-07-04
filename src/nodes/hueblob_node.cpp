@@ -9,5 +9,6 @@ int main(int argc, char **argv)
   HueBlob hueblob;
 
   // Launch main loop (will not return until the program terminates).
-  hueblob.spin();
+  //hueblob.spin();
+  ros::spin();
 }

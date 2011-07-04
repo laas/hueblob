@@ -185,9 +185,6 @@ protected:
   /// asynchronously.
   ros::Publisher blobs_pub_;
   ros::Publisher cloud_pub_;
-  /// Resulting tracked images
-  image_transport::Publisher tracked_left_pub_;
-  image_transport::Publisher tracked_right_pub_;
 
   /// \brief AddObject service server.
   ros::ServiceServer AddObject_srv_;
