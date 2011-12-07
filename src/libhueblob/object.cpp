@@ -75,7 +75,6 @@ Object::addView(const cv::Mat& model)
 void
 Object::getThresholds(const cv::Mat& hsv_img)
 {
-  cv::MatND hist;
   cv::Mat mask(hsv_img.size(), CV_8UC1);
   cv::inRange(hsv_img, cv::Scalar(0,50,50),
 	      cv::Scalar(255, 255, 255),mask);
@@ -84,11 +83,12 @@ Object::getThresholds(const cv::Mat& hsv_img)
   const int hist_size[] = {hbins};
   float hranges[] = {0,255};
   const float* ranges[] = { hranges };
+  cv::SparseMat hist;//(1, hist_size, CV_32F);
   cv::calcHist(&hsv_img, 1, channels, mask,
                hist, 1, hist_size,
                ranges, true, false);
   // normalize hist
-  cv::normalize(hist, hist, 1, 0, cv::NORM_L1);
+  cv::normalize(hist, hist, 0., cv::NORM_L1);
   double maxVal;
   int maxIdx;
   minMaxLoc(hist, NULL, &maxVal, NULL, &maxIdx);
@@ -98,7 +98,8 @@ Object::getThresholds(const cv::Mat& hsv_img)
   unsigned maxh(0), minh(255);
   for (unsigned h = 0; h < hbins; h++)
     {
-      if (abs(float(h) - float(maxIdx)) > 20 || hist.at<float>(h) < 0.02*maxVal)
+      int hs[] = {h};
+      if (abs(float(h) - float(maxIdx)) > 20 || hist.ref<float>(hs) < 0.02*maxVal)
         continue;
       maxh = std::max(maxh, h);
       minh = std::min(minh, h);
