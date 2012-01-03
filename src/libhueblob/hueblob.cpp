@@ -24,7 +24,10 @@
 //#include <pcl_visualization/cloud_viewer.h>
 #include <Eigen/Dense>
 #include <fstream>
+#include <sstream>
+
 #include <yaml-cpp/yaml.h>
+
 void nullDeleter(void*) {}
 void nullDeleterConst(const void*) {}
 
@@ -71,6 +74,9 @@ HueBlob::HueBlob()
   ros::param::param<bool>("~approximate_sync", is_approximate_sync_, false);
   ros::param::param<double>("threshold", threshold_, 75.);
 
+  const std::string tracked_image_topic =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/tracked/image_rect_color");
+  tracked_left_pub_ = it_.advertise(tracked_image_topic, 1);
 
   const std::string blobs_topic =
     ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
@@ -110,13 +116,74 @@ HueBlob::~HueBlob()
 }
 
 void
+HueBlob::publish_tracked_images(hueblob::Blobs blobs)
+{
+  //ROS_DEBUG_THROTTLE(1, "publish_track_cb");
+  // static const std::string tracked_image_topic =
+  //   ros::names::append("/hueblob/", stereo_topic_prefix_ + "/tracked/image_rect_color");
+  if ( tracked_left_pub_.getNumSubscribers() == 0)
+    {
+      return;
+    }
+
+  cv::Mat img;
+  bool tracked(false);
+  for (  std::vector<hueblob::Blob>::iterator iter= blobs.blobs.begin();
+         iter != blobs.blobs.end(); iter++ )
+    {
+      if (!leftImage_ || !rightImage_)
+        break;
+      tracked = true;
+      img = bridgeLeft_.imgMsgToCv(leftImage_, "bgr8");
+      int x =  (*iter).boundingbox_2d[0];
+      int y =  (*iter).boundingbox_2d[1];
+      int width =  (*iter).boundingbox_2d[2];
+      int height =  (*iter).boundingbox_2d[3];
+      cv::Point p1(x, y);
+      cv::Point p2(x + width, y + height);
+      cv::Point pc(x, y + std::max(16, height+8));
+      const cv::Scalar color = CV_RGB(255,0,0);
+      ROS_DEBUG_STREAM("Drawing rect " << x << " " << " " << y
+                       << " " << width << " " << height);
+      cv::rectangle(img, p1, p2, color, 1);
+      std::stringstream ss (std::stringstream::in | std::stringstream::out);
+      cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX,
+                  0.5, color);
+      // boost::format fmter("[%3.3f %3.3f %3.3f %1.2f]");
+      // (fmter % (*iter).cloud_centroid.transform.translation.x
+      //  %  (*iter).cloud_centroid.transform.translation.y
+      //  %  (*iter).cloud_centroid.transform.translation.z
+      //  %  (*iter).depth_density
+      //  );
+      // cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
+      // boost::format fmter2("[%3.3f %3.3f %3.3f]");
+      // (fmter2 % (*iter).position.transform.translation.x
+      //  %  (*iter).position.transform.translation.y
+      //  %  (*iter).position.transform.translation.z
+      //  );
+      // cv::putText(img, fmter2.str(), pc, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
+    }
+
+  if (leftImage_ && tracked){
+    cv_bridge::CvImage brd_im;
+    brd_im.image = img;
+    brd_im.header = leftImage_->header;
+    brd_im.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
+    tracked_left_pub_.publish(brd_im.toImageMsg());
+  }
+  else
+    ROS_WARN_THROTTLE(20,"leftImage_ is not received");
+
+}
+
+void
 HueBlob::spin()
 {
   typedef std::pair<const std::string&, const Object&> iterator_t;
 
   ros::Rate loop_rate(10);
 
-  ROS_DEBUG("Entering the node main loop.");
+  ROS_INFO("Entering  main loop");
   cv::Mat img;
   while (ros::ok())
     {
@@ -127,8 +194,8 @@ HueBlob::spin()
 	  blobs.blobs.push_back(blob);
 	}
 
-
       blobs_pub_.publish(blobs);
+      publish_tracked_images(blobs);
       ros::spinOnce();
       loop_rate.sleep();
     }
@@ -171,7 +238,7 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
                                      disparity_sub_);
       approximate_sync_.registerCallback(boost::bind(&HueBlob::imageCallback,
 				     this, _1, _2, _3, _4, _5));
-      ROS_INFO("Starting in approximate_sync mode");
+      ROS_INFO("approximate_sync mode");
     }
   else
     {
@@ -257,7 +324,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::CameraInfoConstPtr& right_camera,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
-  // ROS_DEBUG_STREAM_THROTTLE(1, "imageCallback");
+  ROS_DEBUG_STREAM_THROTTLE(1, "imageCallback");
   leftImage_ = left;
   rightImage_ = right;
   leftCamera_ = left_camera;
@@ -271,6 +338,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
       blobs.blobs.push_back(blob);
     }
   blobs_pub_.publish(blobs);
+  publish_tracked_images(blobs);
 }
 
 bool

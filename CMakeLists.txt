@@ -20,12 +20,15 @@ rosbuild_genmsg()
 rosbuild_gensrv()
 
 # Library.
+find_package(OpenCV REQUIRED)
+message(STATUS OpenCV libs: ${OpenCV_LIBS})
 rosbuild_add_library(hueblob
   src/libhueblob/object.cpp include/libhueblob/object.hh
   src/libhueblob/hueblob.cpp include/libhueblob/hueblob.hh)
-
+target_link_libraries(hueblob ${OpenCV_LIBS})
 # Nodes.
 #  hueblob node.
+
 rosbuild_add_executable(hueblob_node src/nodes/hueblob_node.cpp)
 target_link_libraries(hueblob_node hueblob)
 
@@ -36,7 +39,7 @@ rosbuild_add_executable(
 
 # Tests
 rosbuild_add_gtest(object tests/object.cpp)
-target_link_libraries(object hueblob)
+target_link_libraries(object hueblob ${OpenCV_LIBS} )
 
 # Download test bag file if required.
 rosbuild_download_test_data(

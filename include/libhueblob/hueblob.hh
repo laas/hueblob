@@ -186,6 +186,10 @@ protected:
   ros::Publisher blobs_pub_;
   ros::Publisher cloud_pub_;
 
+  /// Resulting tracked images
+  image_transport::Publisher tracked_left_pub_;
+  image_transport::Publisher tracked_right_pub_;
+
   /// \brief AddObject service server.
   ros::ServiceServer AddObject_srv_;
 
@@ -231,6 +235,8 @@ protected:
 
   /// approximate sync for image messages
   bool is_approximate_sync_;
+
+  void publish_tracked_images(hueblob::Blobs blobs);
 
 };
 
