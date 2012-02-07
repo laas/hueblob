@@ -36,7 +36,7 @@
 
 # include "libhueblob/object.hh"
 
-
+# include <map>
 
 /// \brief Main class of the HueBlob node.
 ///
@@ -184,7 +184,10 @@ protected:
   /// This topic provides information about tracked blob position
   /// asynchronously.
   ros::Publisher blobs_pub_;
+  std::map<std::string, ros::Publisher> blob_pubs_;
   ros::Publisher cloud_pub_;
+
+  ros::Publisher count_pub_;
 
   /// Resulting tracked images
   image_transport::Publisher tracked_left_pub_;

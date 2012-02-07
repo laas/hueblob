@@ -6,6 +6,8 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/Image.h>
 #include <hueblob/Blob.h>
+#include <std_msgs/Int8.h>
+
 #include <hueblob/AddObject.h>
 
 #include "libhueblob/hueblob.hh"
@@ -53,7 +55,7 @@ HueBlob::HueBlob()
     right_sub_(),
     disparity_sub_(),
     exact_sync_(3),
-    approximate_sync_(3),
+    approximate_sync_(100),
     left_objects_(),
     right_objects_(),
     check_synced_timer_(),
@@ -82,6 +84,10 @@ HueBlob::HueBlob()
     ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
   blobs_pub_ = nh_.advertise<hueblob::Blobs>(blobs_topic, 5);
 
+  const std::string count_topic =
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/count");
+  count_pub_ = nh_.advertise<std_msgs::Int8>(count_topic, 5);
+
   const std::string points2_topic =
     ros::names::append("/hueblob/", stereo_topic_prefix_ + "/points2");
   cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZ> > (points2_topic, 1);
@@ -107,6 +113,7 @@ HueBlob::HueBlob()
 					  &HueBlob::TrackObjectCallback, this);
 
   // Initialize the node subscribers, publishers and filters.
+  ROS_INFO("Setting up Infrastructure");
   setupInfrastructure(stereo_topic_prefix_);
 }
 
@@ -149,19 +156,7 @@ HueBlob::publish_tracked_images(hueblob::Blobs blobs)
       std::stringstream ss (std::stringstream::in | std::stringstream::out);
       cv::putText(img, (*iter).name, p1, CV_FONT_HERSHEY_SIMPLEX,
                   0.5, color);
-      // boost::format fmter("[%3.3f %3.3f %3.3f %1.2f]");
-      // (fmter % (*iter).cloud_centroid.transform.translation.x
-      //  %  (*iter).cloud_centroid.transform.translation.y
-      //  %  (*iter).cloud_centroid.transform.translation.z
-      //  %  (*iter).depth_density
-      //  );
-      // cv::putText(img, fmter.str(), p1, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
-      // boost::format fmter2("[%3.3f %3.3f %3.3f]");
-      // (fmter2 % (*iter).position.transform.translation.x
-      //  %  (*iter).position.transform.translation.y
-      //  %  (*iter).position.transform.translation.z
-      //  );
-      // cv::putText(img, fmter2.str(), pc, CV_FONT_HERSHEY_SIMPLEX, 0.5, color);
+
     }
 
   if (leftImage_ && tracked){
@@ -283,6 +278,10 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
 
           Object& left_object = left_objects_[yaml_model.name];
           Object& right_object = right_objects_[yaml_model.name];
+          const std::string blob_topic =
+            ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs/" + yaml_model.name);
+
+          blob_pubs_[yaml_model.name] = nh_.advertise<hueblob::Blob>(blob_topic, 5);
           if (algo_ == "naive")
             {
               left_object.algo = NAIVE;
@@ -293,7 +292,6 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
               left_object.algo = CAMSHIFT;
               right_object.algo = CAMSHIFT;
             }
-
 
           // Emit a warning if the object already exists.
           if (left_object.anchor_x
@@ -324,20 +322,24 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
 		       const sensor_msgs::CameraInfoConstPtr& right_camera,
 		       const stereo_msgs::DisparityImageConstPtr& disparity)
 {
-  ROS_DEBUG_STREAM_THROTTLE(1, "imageCallback");
   leftImage_ = left;
   rightImage_ = right;
   leftCamera_ = left_camera;
   disparity_ = disparity;
   typedef std::pair<const std::string&, const Object&> iterator_t;
-
+  unsigned count(0);
   hueblob::Blobs blobs;
   BOOST_FOREACH(iterator_t it, left_objects_)
     {
       hueblob::Blob blob = trackBlob(it.first);
       blobs.blobs.push_back(blob);
+      blob_pubs_[blob.name].publish(blob);
+      count++;
     }
   blobs_pub_.publish(blobs);
+  std_msgs::Int8 cnt;
+  cnt.data = count;
+  count_pub_.publish(cnt);
   publish_tracked_images(blobs);
 }
 
@@ -574,6 +576,7 @@ HueBlob::trackBlob(const std::string& name)
     }
   // Fill blob header.
   blob.name = name;
+  blob.header = leftImage_->header;
   blob.position.header = leftImage_->header;
   blob.position.child_frame_id = "/hueblob_" + name;
   blob.boundingbox_2d.resize(4);
@@ -609,7 +612,6 @@ HueBlob::trackBlob(const std::string& name)
         (20, "failed to track object (invalid tracking window)");
       return blob;
     }
-
 
   cv::Point3d center;
   // static pcl_visualization::CloudViewer viewer("Simple Cloud Viewer");
