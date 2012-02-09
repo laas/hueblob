@@ -436,18 +436,8 @@ namespace
                           const stereo_msgs::DisparityImage &disparity_image,
                           const sensor_msgs::CameraInfo &camera_info,
                           float &x, float &y, float &z,
-                          bool shift_correction = false)
+                          )
   {
-    if (shift_correction)
-      {
-        // account for the fact the center point of the image is not the
-        // principal point
-        // not sure if this is really correct or more of a hack, but
-        // without this the image
-        // ends up shifted
-        u = u - (disparity_image.image.width/2  - camera_info.P[0*4+2]);
-        v = v - (disparity_image.image.height/2 - camera_info.P[1*4+2]);
-      }
 
     float fx = camera_info.P[0*4+0];
     float fy = camera_info.P[1*4+1];
@@ -534,7 +524,7 @@ namespace
         int j = rect.x;
         float x, y, z;
         projectTo3d(j, i, disparity,  disparity_image,
-                    camera_info, x, y, z, true);
+                    camera_info, x, y, z);
         center_est.x = x;
         center_est.y = y;
         center_est.z = z;
@@ -553,7 +543,7 @@ namespace
           if (disparity == 0)
             continue;
           projectTo3d(j, i, disparity,  disparity_image,
-                      camera_info, x, y, z, true);
+                      camera_info, x, y, z);
           pcl::PointXYZ point(x,y,z);
           pcl_cloud->points.push_back(point);
         }
