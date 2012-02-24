@@ -72,6 +72,7 @@ HueBlob::HueBlob()
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
   ros::param::param<std::string>("~algo", algo_, "camshift");
+  ros::param::param<std::string>("~frame", frame_, "camera_bottom_left_optical");
   ros::param::param<std::string>("~models", preload_models_, "");
   ros::param::param<bool>("~approximate_sync", is_approximate_sync_, false);
   ros::param::param<double>("threshold", threshold_, 75.);
@@ -631,13 +632,13 @@ HueBlob::trackBlob(const std::string& name)
   Eigen::Vector4f max3d (0., 0., 0., 0.);
   if (pcl_cloud->points.size() >0)
     {
-      cloud_pub_.publish(pcl_cloud);
+      //cloud_pub_.publish(pcl_cloud);
       pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
       sor.setInputCloud (pcl_cloud);
       sor.setMeanK (50);
       sor.setStddevMulThresh (1.0);
       sor.filter (*cloud_filtered);
-      cloud_filtered->header.frame_id = "test";
+      cloud_filtered->header.frame_id = frame_;
       cloud_filtered->header.stamp = leftImage_->header.stamp;
       pcl::compute3DCentroid(*cloud_filtered, centroid);
       pcl::getMinMax3D(*cloud_filtered, min3d, max3d);

@@ -235,7 +235,8 @@ protected:
   std::string algo_;
   /// yaml filename that contains preloaded models
   std::string preload_models_;
-
+  /// ROS frame
+  std::string frame_;
   /// approximate sync for image messages
   bool is_approximate_sync_;
 
