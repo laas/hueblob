@@ -80,12 +80,12 @@ HueBlob::HueBlob()
     ros::names::append("/hueblob/", stereo_topic_prefix_ + "/tracked/image_rect_color");
   tracked_left_pub_ = it_.advertise(tracked_image_topic, 1);
 
-  const std::string blobs_topic =
-    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
-  blobs_pub_ = nh_.advertise<hueblob::Blobs>(blobs_topic, 5);
+  // const std::string blobs_topic =
+  //   ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs");
+  // blobs_pub_ = nh_.advertise<hueblob::Blobs>(blobs_topic, 5);
 
   const std::string count_topic =
-    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/count");
+    ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs/count");
   count_pub_ = nh_.advertise<std_msgs::Int8>(count_topic, 5);
 
   const std::string points2_topic =
@@ -174,26 +174,26 @@ HueBlob::publish_tracked_images(hueblob::Blobs blobs)
 void
 HueBlob::spin()
 {
-  typedef std::pair<const std::string&, const Object&> iterator_t;
+  // typedef std::pair<const std::string&, const Object&> iterator_t;
 
-  ros::Rate loop_rate(10);
+  // ros::Rate loop_rate(10);
 
-  ROS_INFO("Entering  main loop");
-  cv::Mat img;
-  while (ros::ok())
-    {
-      hueblob::Blobs blobs;
-      BOOST_FOREACH(iterator_t it, left_objects_)
-	{
-	  hueblob::Blob blob = trackBlob(it.first);
-	  blobs.blobs.push_back(blob);
-	}
+  // ROS_INFO("Entering  main loop");
+  // cv::Mat img;
+  // while (ros::ok())
+  //   {
+  //     hueblob::Blobs blobs;
+  //     BOOST_FOREACH(iterator_t it, left_objects_)
+  //       {
+  //         hueblob::Blob blob = trackBlob(it.first);
+  //         blobs.blobs.push_back(blob);
+  //       }
 
-      blobs_pub_.publish(blobs);
-      publish_tracked_images(blobs);
-      ros::spinOnce();
-      loop_rate.sleep();
-    }
+  //     // blobs_pub_.publish(blobs);
+  //     publish_tracked_images(blobs);
+  //     ros::spinOnce();
+  //     loop_rate.sleep();
+  //   }
 }
 
 namespace
@@ -336,7 +336,7 @@ HueBlob::imageCallback(const sensor_msgs::ImageConstPtr& left,
       blob_pubs_[blob.name].publish(blob);
       count++;
     }
-  blobs_pub_.publish(blobs);
+  // blobs_pub_.publish(blobs);
   std_msgs::Int8 cnt;
   cnt.data = count;
   count_pub_.publish(cnt);
@@ -436,7 +436,7 @@ namespace
                           const stereo_msgs::DisparityImage &disparity_image,
                           const sensor_msgs::CameraInfo &camera_info,
                           float &x, float &y, float &z,
-                          )
+                          bool shift_correction = false)
   {
 
     float fx = camera_info.P[0*4+0];
@@ -445,6 +445,17 @@ namespace
     float cy = camera_info.P[1*4+2];
     float Tx = camera_info.P[0*4+3];
     float Ty = camera_info.P[1*4+3];
+
+    // if (shift_correction)
+    //   {
+    //     // account for the fact the center point of the image is not the
+    //     // principal point
+    //     // not sure if this is really correct or more of a hack, but
+    //     // without this the image
+    //     // ends up shifted
+    //     u = u - (disparity_image.image.width/2  - cx);
+    //     v = v - (disparity_image.image.height/2 - cy);
+    //   }
 
     z = disparity_image.f * disparity_image.T / disparity;
     x = ( (u - cx ) / fx );
@@ -524,7 +535,7 @@ namespace
         int j = rect.x;
         float x, y, z;
         projectTo3d(j, i, disparity,  disparity_image,
-                    camera_info, x, y, z);
+                    camera_info, x, y, z, true);
         center_est.x = x;
         center_est.y = y;
         center_est.z = z;
@@ -543,7 +554,7 @@ namespace
           if (disparity == 0)
             continue;
           projectTo3d(j, i, disparity,  disparity_image,
-                      camera_info, x, y, z);
+                      camera_info, x, y, z, true);
           pcl::PointXYZ point(x,y,z);
           pcl_cloud->points.push_back(point);
         }

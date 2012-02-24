@@ -183,7 +183,7 @@ protected:
   ///
   /// This topic provides information about tracked blob position
   /// asynchronously.
-  ros::Publisher blobs_pub_;
+  /// ros::Publisher blobs_pub_;
   std::map<std::string, ros::Publisher> blob_pubs_;
   ros::Publisher cloud_pub_;
 
