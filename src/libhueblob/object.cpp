@@ -140,7 +140,7 @@ namespace
   /// \brief Reset search zone if it is incorrect.
   void resetSearchZone(cv::Rect& rect, const cv::Mat& backProject)
   {
-    if (rect.x < 0 || rect.y < 0)
+    if (rect.x < 0 || rect.y < 0 || rect.x > backProject.cols - 1 || rect.y > backProject.rows - 1)
       {
 	rect.x = 0;
 	rect.y = 0;
@@ -152,6 +152,11 @@ namespace
       rect.width = backProject.cols - 1 - rect.x;
     if (rect.y + rect.height > backProject.rows - 1)
       rect.height = backProject.rows - 1 - rect.y;
+
+    if (rect.width <= 0)
+      rect.width = 1;
+    if (rect.height <= 0)
+      rect.height = 1;
   }
 } // end of anonymous namespace.
 
@@ -254,7 +259,10 @@ Object::track_camshift(const cv::Mat& image)
   cv::TermCriteria criteria =
     cv::TermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
   // std::cout << searchWindow_.width << " "
-  //           << searchWindow_.height<< std::endl;
+  //           << searchWindow_.height<< " "
+  //           << searchWindow_.x << " "
+  //           << searchWindow_.y
+  //           << std::endl;
   result = cv::CamShift(backProject, searchWindow_, criteria);
   searchWindow_ = result->boundingRect();
 
