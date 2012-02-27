@@ -24,5 +24,6 @@
   <depend package="geometry_msgs"/>
   <depend package="cv_bridge"/>
   <depend package="bullet"/>
+  <depend package="visualization_msgs"/>
   <rosdep name="opencv2.3"/>
 </package>

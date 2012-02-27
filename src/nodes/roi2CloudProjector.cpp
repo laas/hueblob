@@ -17,7 +17,7 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <hueblob/RoiStamped.h>
 #include <sensor_msgs/image_encodings.h>
-
+#include <visualization_msgs/Marker.h>
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -28,7 +28,10 @@
 #include "highgui.h"
 
 #include <cv_bridge/cv_bridge.h>
+#include <Eigen/Dense>
 
+// tf
+#include <tf/transform_broadcaster.h>
 
 namespace
 {
@@ -161,9 +164,11 @@ private:
   message_filters::Subscriber<sensor_msgs::CameraInfo> camera_info_sub_;
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
   image_transport::SubscriberFilter image_sub_;
-  ros::Publisher cloud_pub_, cloud_filtered_pub_;
+  ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_;
   pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor_;
 
+  tf::TransformBroadcaster br_;
+  string base_name_;
 };
 
 
@@ -174,31 +179,35 @@ Projector::Projector()
     roi_sub_(),
     camera_info_sub_(),
     disparity_sub_(),
-    sor_()
+    sor_(),
+    br_()
 {
-  string blob2d_topic, disparity_topic, cloud_topic, \
-    camera_info_topic, image_topic, cloud_filtered_topic;
+  string blob2d_topic, disparity_topic, cloud_topic, blob_name, \
+    camera_info_topic, image_topic, cloud_filtered_topic, marker_topic;
   ros::param::param<string>("~blob2d", blob2d_topic, "blobs/rose/blob2d");
   ros::param::param<string>("~disparity", disparity_topic, "disparity");
   ros::param::param<string>("~camera_info", camera_info_topic, "left/camera_info");
   ros::param::param<string>("~image", image_topic, "left/image_rect_color");
-  ros::param::param<string>("~cloud", cloud_topic, "blobs/rose/points");
+  ros::param::param<string>("~blob_name", blob_name, "rose");
 
 
 
   sor_.setMeanK (50);
   sor_.setStddevMulThresh (1.0);
 
-  blob2d_topic      = ros::names::resolve(blob2d_topic);
-  disparity_topic   = ros::names::resolve(disparity_topic);
-  cloud_topic       = ros::names::resolve(cloud_topic);
-  camera_info_topic = ros::names::resolve(camera_info_topic);
-  image_topic       = ros::names::resolve(image_topic);
-  cloud_filtered_topic = ros::names::append(cloud_topic, "_filtered");
+  blob2d_topic         = ros::names::resolve(blob2d_topic);
+  disparity_topic      = ros::names::resolve(disparity_topic);
+  cloud_topic          = ros::names::resolve(cloud_topic);
+  camera_info_topic    = ros::names::resolve(camera_info_topic);
+  image_topic          = ros::names::resolve(image_topic);
+  base_name_           = ros::names::resolve(ros::names::append("blobs" , blob_name));
+  cloud_filtered_topic = ros::names::append(base_name_, "points/filtered");
+  marker_topic         = ros::names::append(base_name_, "points/marker");
+  cloud_topic          = ros::names::append(base_name_, "points/raw");
 
-  cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
   cloud_filtered_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_filtered_topic, 1);
-
+  marker_pub_ = nh_.advertise<visualization_msgs::Marker>  (marker_topic, 1);
+  cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
 
   roi_sub_.subscribe(nh_, blob2d_topic, 10);
   camera_info_sub_.subscribe(nh_, camera_info_topic, 10);
@@ -233,11 +242,33 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
   get3dCloud(*disparity, *info, *image,
              *roi_stamped,
              cloud);
+
   sor_.setInputCloud (cloud);
   sor_.filter (*cloud_filtered);
 
   cloud_pub_.publish(cloud);
   cloud_filtered_pub_.publish(cloud_filtered);
+  Eigen::Vector4f centroid (0., 0., 0., 0.);
+  pcl::compute3DCentroid(*cloud_filtered, centroid);
+  visualization_msgs::Marker marker;
+  marker.header = roi_stamped->header;
+  marker.type = visualization_msgs::Marker::SPHERE;
+  marker.pose.position.x = centroid[0];
+  marker.pose.position.y = centroid[1];
+  marker.pose.position.z = centroid[2];
+  marker.scale.x = 0.1;
+  marker.scale.y = 0.1;
+  marker.scale.z = 0.1;
+  marker_pub_.publish(marker);
+  tf::Transform transform;
+  transform.setIdentity();
+  transform.setOrigin(tf::Vector3(centroid[0],centroid[1],centroid[2]));
+  br_.sendTransform(tf::StampedTransform(transform, roi_stamped->header.stamp,
+                                         roi_stamped->header.frame_id,
+                                         ros::names::append(base_name_, "centroid")
+                                         )
+                    );
+
 }
 
 int main(int argc, char **argv)
