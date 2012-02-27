@@ -2,13 +2,16 @@
 #include <ros/console.h>
 #include "libhueblob/object.hh"
 #include <sensor_msgs/Image.h>
+#include <sensor_msgs/RegionOfInterest.h>
+#include <sensor_msgs/image_encodings.h>
+#include <hueblob/RoiStamped.h>
+
+
 #include "cv.h"
 #include "highgui.h"
 #include <cv_bridge/cv_bridge.h>
-#include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
-#include <hueblob/Box.h>
 
 using namespace std;
 namespace enc = sensor_msgs::image_encodings;
@@ -24,7 +27,7 @@ private:
   ros::NodeHandle nh_;
   image_transport::ImageTransport it_;
   image_transport::SubscriberFilter sub_;
-  ros::Publisher pub_;
+  ros::Publisher roi_pub_;
   string image_, model_path_, name_;
   Object object_;
 };
@@ -34,7 +37,7 @@ Tracker2D::Tracker2D()
   : nh_("track_2d"),
     it_(nh_),
     sub_(),
-    pub_(),
+    roi_pub_(),
     image_(),
     model_path_(),
     name_(),
@@ -49,8 +52,9 @@ Tracker2D::Tracker2D()
   cv::Mat model = cv::imread(model_path_.c_str());
   object_.addView(model);
 
-  const::string box_topic = ros::names::resolve("blobs/" + name_ + "/blob2d");
-  pub_ = nh_.advertise<hueblob::Box>(box_topic, 5);
+  const::string roi_topic = ros::names::resolve("blobs/" + name_ + "/blob2d");
+
+  roi_pub_ = nh_.advertise<hueblob::RoiStamped>(roi_topic, 5);
 
   sub_.subscribe(it_, image_topic, 5);
   sub_.registerCallback(boost::bind(&Tracker2D::imageCallback,
@@ -80,13 +84,15 @@ void Tracker2D::imageCallback(const sensor_msgs::ImageConstPtr& msg)
       return;
     }
   cv::Rect rect = rrect->boundingRect();
-  hueblob::Box box;
-  box.header = msg->header;
-  box.x = rect.x;
-  box.y = rect.y;
-  box.width = rect.width;
-  box.height = rect.height;
-  pub_.publish(box);
+  hueblob::RoiStamped r;
+  r.header = msg->header;
+  r.roi.x_offset = rect.x;
+  r.roi.y_offset = rect.y;
+  r.roi.width = rect.width;
+  r.roi.height = rect.height;
+  r.roi.do_rectify = true;
+
+  roi_pub_.publish(r);
 }
 
 int main(int argc, char **argv)

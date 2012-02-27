@@ -35,8 +35,8 @@ target_link_libraries(hueblob_node hueblob)
 rosbuild_add_executable(tracker_2d src/nodes/tracker_2d.cpp)
 target_link_libraries(tracker_2d hueblob)
 
-rosbuild_add_executable(blob2CloudProjector src/nodes/blob2CloudProjector.cpp)
-target_link_libraries(blob2CloudProjector hueblob)
+rosbuild_add_executable(roi2CloudProjector src/nodes/roi2CloudProjector.cpp)
+target_link_libraries(roi2CloudProjector hueblob)
 
 # fake_camera_synchronizer_node node.
 rosbuild_add_executable(
