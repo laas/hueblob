@@ -84,23 +84,15 @@ namespace
 
   void get3dCloud(const stereo_msgs::DisparityImage &disparity_image,
                   const sensor_msgs::CameraInfo &camera_info,
-                  const sensor_msgs::Image &image,
+                  const sensor_msgs::Image &bgr_image,
+                  const sensor_msgs::Image &mono_image,
                   const hueblob::RoiStamped & roi_stamped,
                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud
                   )
   {
     namespace enc = sensor_msgs::image_encodings;
-    cv_bridge::CvImagePtr cv_ptr;
-    try
-      {
-      cv_ptr = cv_bridge::toCvCopy(image, enc::BGR8);
-      }
-    catch (cv_bridge::Exception& e)
-      {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-      }
-
+    cv_bridge::CvImagePtr cv_rgb_ptr  = cv_bridge::toCvCopy(bgr_image, enc::BGR8);
+    //cv_bridge::CvImagePtr cv_mono_ptr = cv_bridge::toCvCopy(mono_image, enc::MONO8);
 
     const sensor_msgs::RegionOfInterest roi = roi_stamped.roi;
     for (unsigned i = roi.y_offset; i < roi.y_offset + roi.height; ++i)
@@ -109,18 +101,28 @@ namespace
           if (!hasDisparityValue(disparity_image, i, j))
             continue;
           float disparity, x, y, z;
-
+          unsigned u = i - roi.y_offset;
+          unsigned v = j - roi.x_offset;
           getPoint(disparity_image.image, i, j, disparity);
           ROS_ASSERT(disparity_image.max_disparity != 0.0);
           if (disparity == 0)
             continue;
+
+
+          unsigned char mono;
+          memcpy(&mono, &(mono_image.data.at( u*mono_image.step + sizeof(char)*v )),
+                 sizeof(char));
+          //ROS_INFO_STREAM("Mono "<< u << " " << v << " " << (int) mono);
+          if (mono == 0)
+            continue;
+
           projectTo3d(j, i, disparity,  disparity_image,
                       camera_info, x, y, z);
           pcl::PointXYZRGB p;
           p.x = x;
           p.y = y;
           p.z = z;
-          cv::Vec3b rgb = cv_ptr->image.at<cv::Vec3b>(i,j);
+          cv::Vec3b rgb = cv_rgb_ptr->image.at<cv::Vec3b>(u, v);
           p.r = rgb[2];
           p.g = rgb[1];
           p.b = rgb[0];
@@ -144,12 +146,14 @@ public:
 
 private:
   void callback(const sensor_msgs::CameraInfoConstPtr& info,
-                const sensor_msgs::ImageConstPtr& image,
+                const sensor_msgs::ImageConstPtr& bgr_image,
+                const sensor_msgs::ImageConstPtr& mono_image,
                 const stereo_msgs::DisparityImageConstPtr& disparity,
                 const hueblob::RoiStampedConstPtr& box
                 );
 
   typedef message_filters::sync_policies::ApproximateTime< sensor_msgs::CameraInfo,
+                                                           sensor_msgs::Image,
                                                            sensor_msgs::Image,
                                                            stereo_msgs::DisparityImage,
                                                            hueblob::RoiStamped
@@ -163,7 +167,7 @@ private:
   message_filters::Subscriber<hueblob::RoiStamped> roi_sub_;
   message_filters::Subscriber<sensor_msgs::CameraInfo> camera_info_sub_;
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
-  image_transport::SubscriberFilter image_sub_;
+  image_transport::SubscriberFilter bgr_image_sub_, mono_image_sub_;
   ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_;
   pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor_;
 
@@ -183,11 +187,12 @@ Projector::Projector()
     br_()
 {
   string blob2d_topic, disparity_topic, cloud_topic, blob_name, \
-    camera_info_topic, image_topic, cloud_filtered_topic, marker_topic;
+    camera_info_topic, bgr_image_topic, mono_image_topic, cloud_filtered_topic, marker_topic;
   ros::param::param<string>("~blob2d", blob2d_topic, "blobs/rose/blob2d");
   ros::param::param<string>("~disparity", disparity_topic, "disparity");
   ros::param::param<string>("~camera_info", camera_info_topic, "left/camera_info");
-  ros::param::param<string>("~image", image_topic, "left/image_rect_color");
+  ros::param::param<string>("~bgr_image", bgr_image_topic, "blobs/rose/bgr_image");
+  ros::param::param<string>("~mono_image", mono_image_topic, "blobs/rose/mono_image");
   ros::param::param<string>("~blob_name", blob_name, "rose");
 
 
@@ -199,7 +204,8 @@ Projector::Projector()
   disparity_topic      = ros::names::resolve(disparity_topic);
   cloud_topic          = ros::names::resolve(cloud_topic);
   camera_info_topic    = ros::names::resolve(camera_info_topic);
-  image_topic          = ros::names::resolve(image_topic);
+  bgr_image_topic      = ros::names::resolve(bgr_image_topic);
+  mono_image_topic      = ros::names::resolve(mono_image_topic);
   base_name_           = ros::names::resolve(ros::names::append("blobs" , blob_name));
   cloud_filtered_topic = ros::names::append(base_name_, "points/filtered");
   marker_topic         = ros::names::append(base_name_, "points/marker");
@@ -211,25 +217,31 @@ Projector::Projector()
 
   roi_sub_.subscribe(nh_, blob2d_topic, 10);
   camera_info_sub_.subscribe(nh_, camera_info_topic, 10);
-  image_sub_.subscribe(it_, image_topic, 10);
+  bgr_image_sub_.subscribe(it_, bgr_image_topic, 10);
+  mono_image_sub_.subscribe(it_, mono_image_topic, 10);
   disparity_sub_.subscribe(nh_, disparity_topic, 10);
 
-  sync_.connectInput(camera_info_sub_, image_sub_, disparity_sub_, roi_sub_);
+  sync_.connectInput(camera_info_sub_, bgr_image_sub_, mono_image_sub_, disparity_sub_, roi_sub_);
   sync_.registerCallback(boost::bind(&Projector::callback,
-                                     this, _1, _2, _3, _4));
+                                     this, _1, _2, _3, _4, _5));
 
   ROS_INFO_STREAM(endl<< "Listening to:"
                   << "\n\t* " << blob2d_topic
                   << "\n\t* " << disparity_topic
                   << "\n\t* " << camera_info_topic
+                  << "\n\t* " << bgr_image_topic
+                  << "\n\t* " << mono_image_topic
                   << endl
                   << "Publishing to:"
-                  << "\n\t* " << cloud_topic);
+                  << "\n\t* " << cloud_topic
+		  << "\n\t* " << cloud_filtered_topic
+		  );
 
 }
 
 void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
-                         const sensor_msgs::ImageConstPtr& image,
+                         const sensor_msgs::ImageConstPtr& bgr_image,
+                         const sensor_msgs::ImageConstPtr& mono_image,
                          const stereo_msgs::DisparityImageConstPtr& disparity,
                          const hueblob::RoiStampedConstPtr& roi_stamped
                 )
@@ -237,9 +249,10 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-  //ROS_INFO_STREAM(box->x << " " << box->y << " " << box->width << " " << box->height);
+  // ROS_INFO_STREAM(roi_stamped->roi.x_offset << " " << roi_stamped->roi.y_offset << " "
+  //                 << roi_stamped->roi.width << " " << roi_stamped->roi.height);
 
-  get3dCloud(*disparity, *info, *image,
+  get3dCloud(*disparity, *info, *bgr_image, *mono_image,
              *roi_stamped,
              cloud);
 
