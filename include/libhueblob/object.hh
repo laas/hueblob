@@ -73,6 +73,7 @@ struct Object {
   /// Where the object has been seen the last time it has been
   /// successfully tracked.
   cv::Rect searchWindow_;
+  cv::Mat imgHSV_;
 };
 
 #endif //! HUEBLOB_OBJECT_HH

@@ -99,7 +99,7 @@ Object::getThresholds(const cv::Mat& hsv_img)
   for (unsigned h = 0; h < hbins; h++)
     {
       int hs[] = {h};
-      if (abs(float(h) - float(maxIdx)) > 20 || hist.ref<float>(hs) < 0.02*maxVal)
+      if (abs(float(h) - float(maxIdx)) > 20 || hist.ref<float>(hs) < 0.1*maxVal)
         continue;
       maxh = std::max(maxh, h);
       minh = std::min(minh, h);
@@ -220,20 +220,19 @@ Object::track_camshift(const cv::Mat& image)
     return result;
 
   // Convert to HSV.
-  cv::Mat hsv;
-  cv::cvtColor(image, hsv, CV_BGR2HSV);
+  cv::cvtColor(image, imgHSV_, CV_BGR2HSV);
 
   // Compute back projection.
   //  only use channels 0 and 1 (hue and saturation).
   int channels[] = {0, 1};
   cv::Mat backProject;
-  cv::calcBackProject(&hsv, 1, channels, modelHistogram_[0], backProject,
+  cv::calcBackProject(&imgHSV_, 1, channels, modelHistogram_[0], backProject,
 		      ranges);
 
   for(int nmodel = 1; nmodel < nViews; ++nmodel)
     {
       cv::Mat backProjectTmp;
-      cv::calcBackProject(&hsv, 1, channels, modelHistogram_[nmodel],
+      cv::calcBackProject(&imgHSV_, 1, channels, modelHistogram_[nmodel],
 			  backProjectTmp, ranges);
 
       // Merge back projections while taking care of overflows.

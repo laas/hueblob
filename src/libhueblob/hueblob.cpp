@@ -295,9 +295,9 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
             }
 
           // Emit a warning if the object already exists.
-          if (left_object.anchor_x
-              || left_object.anchor_y
-              || left_object.anchor_z)
+          if (left_object.anchor_x_
+              || left_object.anchor_y_
+              || left_object.anchor_z_)
             ROS_WARN("Overwriting the object %s", yaml_model.name.c_str());
           cv::Mat model = cv::imread(yaml_model.path);
           // Add the view to the object.
@@ -383,21 +383,21 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
 
 
   // Emit a warning if the object already exists.
-  if (left_object.anchor_x
-      || left_object.anchor_y
-      || left_object.anchor_z)
+  if (left_object.anchor_x_
+      || left_object.anchor_y_
+      || left_object.anchor_z_)
     ROS_WARN("Overwriting the object %s", request.name.c_str());
 
   // Initialize the object.
-  left_object.anchor_x = request.anchor.x;
-  left_object.anchor_y = request.anchor.y;
-  left_object.anchor_z = request.anchor.z;
+  left_object.anchor_x_ = request.anchor.x;
+  left_object.anchor_y_ = request.anchor.y;
+  left_object.anchor_z_ = request.anchor.z;
   // Add the view to the object.
   left_object.addView(model);
 
-  right_object.anchor_x = request.anchor.x;
-  right_object.anchor_y = request.anchor.y;
-  right_object.anchor_z = request.anchor.z;
+  right_object.anchor_x_ = request.anchor.x;
+  right_object.anchor_y_ = request.anchor.y;
+  right_object.anchor_z_ = request.anchor.z;
   // Add the view to the object.
   right_object.addView(model);
 
@@ -656,9 +656,9 @@ HueBlob::trackBlob(const std::string& name)
   center.x = centroid[0];
   center.y = centroid[1];
   center.z = centroid[2];
-  center.x += object.anchor_x;
-  center.y += object.anchor_y;
-  center.z += object.anchor_z;
+  center.x += object.anchor_x_;
+  center.y += object.anchor_y_;
+  center.z += object.anchor_z_;
 
   // Fill blob.
   blob.cloud_centroid.transform.translation.x = center.x;
