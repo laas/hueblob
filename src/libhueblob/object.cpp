@@ -17,10 +17,10 @@ static const float* ranges[] = { hue_range, sat_range };
 Object::Object()
   :
      algo(CAMSHIFT),
-     anchor_x(),
-     anchor_y(),
-     anchor_z(),
-     modelHistogram(),
+     anchor_x_(),
+     anchor_y_(),
+     anchor_z_(),
+     modelHistogram_(),
      searchWindow_(-1, -1, -1, -1)
 {}
 
@@ -66,7 +66,7 @@ Object::addView(const cv::Mat& model)
   //  merged soon enough.
   cv::Mat hist_(hist);
   cv::convertScaleAbs(hist_, hist_, max ? 255. / max : 0., 0);
-  this->modelHistogram.push_back(hist);
+  this->modelHistogram_.push_back(hist);
 
   // compute histogram and thresholds for naive method
   getThresholds(hsv);
@@ -92,9 +92,9 @@ Object::getThresholds(const cv::Mat& hsv_img)
   double maxVal;
   int maxIdx;
   minMaxLoc(hist, NULL, &maxVal, NULL, &maxIdx);
-  peak_color[0] = maxIdx;
-  peak_color[1] = 200;
-  peak_color[2] = 200;
+  peak_color_[0] = maxIdx;
+  peak_color_[1] = 200;
+  peak_color_[2] = 200;
   unsigned maxh(0), minh(255);
   for (unsigned h = 0; h < hbins; h++)
     {
@@ -115,24 +115,24 @@ Object::getThresholds(const cv::Mat& hsv_img)
   cv::Mat chans[] = {hchan, schan, vchan};
   cv::split(hsv_img, chans);
 
-  minMaxLoc(hchan, &lower_hue[0], &upper_hue[0], 0, 0, mask);
-  minMaxLoc(schan, &lower_hue[1], &upper_hue[1], 0, 0, mask);
-  minMaxLoc(vchan, &lower_hue[2], &upper_hue[2], 0, 0, mask);
+  minMaxLoc(hchan, &lower_hue_[0], &upper_hue_[0], 0, 0, mask);
+  minMaxLoc(schan, &lower_hue_[1], &upper_hue_[1], 0, 0, mask);
+  minMaxLoc(vchan, &lower_hue_[2], &upper_hue_[2], 0, 0, mask);
   // Tolerance for s and v
-  upper_hue[1] = 255;
-  upper_hue[2] = 255;
+  upper_hue_[1] = 255;
+  upper_hue_[2] = 255;
   // float tol = 1.1;
   // lower[1]/= tol;o
   // lower[2]/= tol;
   // upper[1]*= tol;
   // upper[2]*= tol;
   // std::cout << maxIdx << " " << std::endl;
-  // std::cout << lower_hue[0] << " "
-  //           << lower_hue[1] << " "
-  //           << lower_hue[2] << " " << std::endl;
-  // std::cout << upper_hue[0] << " "
-  //           << upper_hue[1] << " "
-  //           << upper_hue[2] << " " << std::endl;
+  // std::cout << lower_hue_[0] << " "
+  //           << lower_hue_[1] << " "
+  //           << lower_hue_[2] << " " << std::endl;
+  // std::cout << upper_hue_[0] << " "
+  //           << upper_hue_[1] << " "
+  //           << upper_hue_[2] << " " << std::endl;
 }
 
 namespace
@@ -176,8 +176,8 @@ Object::track_naive(const cv::Mat& image)
   cv::Mat imgHSV(image.rows, image.cols, CV_8UC3);
   cv::cvtColor(image, imgHSV, CV_BGR2HSV);
   cv::Mat  imgThreshed(image.rows, image.cols, CV_8UC1);
-  cv::inRange(imgHSV, lower_hue,
-              upper_hue, imgThreshed);
+  cv::inRange(imgHSV, lower_hue_,
+              upper_hue_, imgThreshed);
   std::vector< std::vector<cv::Point2i> > contours;
   std::vector<cv::Vec4i> hierarchy;
   cv::dilate(imgThreshed, imgThreshed, cv::Mat() );
@@ -215,7 +215,7 @@ Object::track_camshift(const cv::Mat& image)
 {
   boost::optional<cv::RotatedRect> result;
 
-  int nViews = modelHistogram.size();
+  int nViews = modelHistogram_.size();
   if (!nViews)
     return result;
 
@@ -227,13 +227,13 @@ Object::track_camshift(const cv::Mat& image)
   //  only use channels 0 and 1 (hue and saturation).
   int channels[] = {0, 1};
   cv::Mat backProject;
-  cv::calcBackProject(&hsv, 1, channels, modelHistogram[0], backProject,
+  cv::calcBackProject(&hsv, 1, channels, modelHistogram_[0], backProject,
 		      ranges);
 
   for(int nmodel = 1; nmodel < nViews; ++nmodel)
     {
       cv::Mat backProjectTmp;
-      cv::calcBackProject(&hsv, 1, channels, modelHistogram[nmodel],
+      cv::calcBackProject(&hsv, 1, channels, modelHistogram_[nmodel],
 			  backProjectTmp, ranges);
 
       // Merge back projections while taking care of overflows.

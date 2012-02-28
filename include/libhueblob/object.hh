@@ -53,21 +53,21 @@ struct Object {
 
   /// \name Anchor
   /// \{
-  double anchor_x;
-  double anchor_y;
-  double anchor_z;
+  double anchor_x_;
+  double anchor_y_;
+  double anchor_z_;
   /// \}
 
   /// \brief Contains all the histograms associated with this object.
   // hue and sat used by CAMShift algorithm
-  std::vector<cv::MatND> modelHistogram;
+  std::vector<cv::MatND> modelHistogram_;
 
   // only hue
-  std::vector<cv::MatND> hueHistogram;
+  std::vector<cv::MatND> hueHistogram_;
   // bounding hues
-  cv::Scalar lower_hue;
-  cv::Scalar upper_hue;
-  cv::Scalar peak_color;
+  cv::Scalar lower_hue_;
+  cv::Scalar upper_hue_;
+  cv::Scalar peak_color_;
   /// \brief Object search window.
   ///
   /// Where the object has been seen the last time it has been
