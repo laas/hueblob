@@ -18,6 +18,7 @@
 #include <hueblob/RoiStamped.h>
 #include <sensor_msgs/image_encodings.h>
 #include <visualization_msgs/Marker.h>
+#include <hueblob/Blob.h>
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -168,7 +169,7 @@ private:
   message_filters::Subscriber<sensor_msgs::CameraInfo> camera_info_sub_;
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
   image_transport::SubscriberFilter bgr_image_sub_, mono_image_sub_;
-  ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_;
+  ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_, blob3d_pub_;
   pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor_;
 
   tf::TransformBroadcaster br_;
@@ -186,9 +187,11 @@ Projector::Projector()
     sor_(),
     br_()
 {
-  string blob2d_topic, disparity_topic, cloud_topic, blob_name, \
-    camera_info_topic, bgr_image_topic, mono_image_topic, cloud_filtered_topic, marker_topic;
+  string blob2d_topic, blob3d_topic, disparity_topic, cloud_topic, blob_name, \
+    camera_info_topic, bgr_image_topic, mono_image_topic, \
+    cloud_filtered_topic, marker_topic;
   ros::param::param<string>("~blob2d", blob2d_topic, "blobs/rose/blob2d");
+  ros::param::param<string>("~blob3d", blob3d_topic, "blobs/rose/blob3d");
   ros::param::param<string>("~disparity", disparity_topic, "disparity");
   ros::param::param<string>("~camera_info", camera_info_topic, "left/camera_info");
   ros::param::param<string>("~bgr_image", bgr_image_topic, "blobs/rose/bgr_image");
@@ -201,11 +204,12 @@ Projector::Projector()
   sor_.setStddevMulThresh (1.0);
 
   blob2d_topic         = ros::names::resolve(blob2d_topic);
+  blob3d_topic         = ros::names::resolve(blob3d_topic);
   disparity_topic      = ros::names::resolve(disparity_topic);
   cloud_topic          = ros::names::resolve(cloud_topic);
   camera_info_topic    = ros::names::resolve(camera_info_topic);
   bgr_image_topic      = ros::names::resolve(bgr_image_topic);
-  mono_image_topic      = ros::names::resolve(mono_image_topic);
+  mono_image_topic     = ros::names::resolve(mono_image_topic);
   base_name_           = ros::names::resolve(ros::names::append("blobs" , blob_name));
   cloud_filtered_topic = ros::names::append(base_name_, "points/filtered");
   marker_topic         = ros::names::append(base_name_, "points/marker");
@@ -214,6 +218,7 @@ Projector::Projector()
   cloud_filtered_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_filtered_topic, 1);
   marker_pub_ = nh_.advertise<visualization_msgs::Marker>  (marker_topic, 1);
   cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
+  blob3d_pub_  = nh_.advertise<hueblob::Blob> (blob3d_topic, 1);
 
   roi_sub_.subscribe(nh_, blob2d_topic, 10);
   camera_info_sub_.subscribe(nh_, camera_info_topic, 10);
@@ -281,7 +286,25 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
                                          ros::names::append(base_name_, "centroid")
                                          )
                     );
+  hueblob::Blob blob;
+  blob.cloud_centroid.transform.translation.x = centroid[0];
+  blob.cloud_centroid.transform.translation.y = centroid[1];
+  blob.cloud_centroid.transform.translation.z = centroid[2];
+  blob.cloud_centroid.transform.rotation.x = 0.;
+  blob.cloud_centroid.transform.rotation.y = 0.;
+  blob.cloud_centroid.transform.rotation.z = 0.;
+  blob.cloud_centroid.transform.rotation.w = 1.;
+  blob.cloud_centroid.header.stamp = roi_stamped->header.stamp;
+  blob.depth_density = 1.*cloud_filtered->points.size()/(roi_stamped->roi.width*
+							 roi_stamped->roi.height);
+  blob.boundingbox_2d.resize(4);
+  blob.boundingbox_2d[0] = roi_stamped->roi.x_offset;
+  blob.boundingbox_2d[1] = roi_stamped->roi.y_offset;
+  blob.boundingbox_2d[2] = roi_stamped->roi.width;
+  blob.boundingbox_2d[3] = roi_stamped->roi.height;
 
+  blob.header = roi_stamped->header;
+  blob3d_pub_.publish(blob);
 }
 
 int main(int argc, char **argv)
