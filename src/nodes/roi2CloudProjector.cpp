@@ -88,7 +88,8 @@ namespace
                   const sensor_msgs::Image &bgr_image,
                   const sensor_msgs::Image &mono_image,
                   const hueblob::RoiStamped & roi_stamped,
-                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud
+                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw,
+                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
                   )
   {
     namespace enc = sensor_msgs::image_encodings;
@@ -114,7 +115,7 @@ namespace
           memcpy(&mono, &(mono_image.data.at( u*mono_image.step + sizeof(char)*v )),
                  sizeof(char));
           //ROS_INFO_STREAM("Mono "<< u << " " << v << " " << (int) mono);
-          if (mono == 0)
+          if (mono == 0 and !cloud_raw)
             continue;
 
           projectTo3d(j, i, disparity,  disparity_image,
@@ -128,9 +129,27 @@ namespace
           p.g = rgb[1];
           p.b = rgb[0];
           //ROS_INFO_STREAM(rgb[0]);
-          cloud->points.push_back(p);
-          cloud->header = roi_stamped.header;
+          cloud_raw->points.push_back(p);
+          cloud_raw->header = roi_stamped.header;
+
+          if (mono)
+            {
+              cloud_filtered->points.push_back(p);
+              cloud_filtered->header = roi_stamped.header;
+            }
         }
+
+    static pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+    sor.setMeanK (50);
+    sor.setStddevMulThresh (1.0);
+
+    if (cloud_raw)
+      {
+        sor.setInputCloud (cloud_raw);
+        sor.filter (*cloud_raw);
+      }
+    sor.setInputCloud (cloud_filtered);
+    sor.filter (*cloud_filtered);
   }
 
 } // end of anonymous namespace.
@@ -170,7 +189,7 @@ private:
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
   image_transport::SubscriberFilter bgr_image_sub_, mono_image_sub_;
   ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_, blob3d_pub_;
-  pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor_;
+
 
   tf::TransformBroadcaster br_;
   string base_name_;
@@ -184,7 +203,6 @@ Projector::Projector()
     roi_sub_(),
     camera_info_sub_(),
     disparity_sub_(),
-    sor_(),
     br_()
 {
   string blob2d_topic, blob3d_topic, disparity_topic, cloud_topic, blob_name, \
@@ -198,10 +216,6 @@ Projector::Projector()
   ros::param::param<string>("~mono_image", mono_image_topic, "blobs/rose/mono_image");
   ros::param::param<string>("~blob_name", blob_name, "rose");
 
-
-
-  sor_.setMeanK (50);
-  sor_.setStddevMulThresh (1.0);
 
   blob2d_topic         = ros::names::resolve(blob2d_topic);
   blob3d_topic         = ros::names::resolve(blob3d_topic);
@@ -252,19 +266,16 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
                 )
 {
 
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw(new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
   // ROS_INFO_STREAM(roi_stamped->roi.x_offset << " " << roi_stamped->roi.y_offset << " "
   //                 << roi_stamped->roi.width << " " << roi_stamped->roi.height);
 
   get3dCloud(*disparity, *info, *bgr_image, *mono_image,
              *roi_stamped,
-             cloud);
+             cloud_raw, cloud_filtered);
 
-  sor_.setInputCloud (cloud);
-  sor_.filter (*cloud_filtered);
-
-  cloud_pub_.publish(cloud);
+  cloud_pub_.publish(cloud_raw);
   cloud_filtered_pub_.publish(cloud_filtered);
   Eigen::Vector4f centroid (0., 0., 0., 0.);
   pcl::compute3DCentroid(*cloud_filtered, centroid);
