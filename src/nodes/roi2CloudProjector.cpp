@@ -271,11 +271,21 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
   // ROS_INFO_STREAM(roi_stamped->roi.x_offset << " " << roi_stamped->roi.y_offset << " "
   //                 << roi_stamped->roi.width << " " << roi_stamped->roi.height);
 
-  get3dCloud(*disparity, *info, *bgr_image, *mono_image,
+
+  if ( cloud_pub_.getNumSubscribers() != 0)
+    {
+      get3dCloud(*disparity, *info, *bgr_image, *mono_image,
              *roi_stamped,
              cloud_raw, cloud_filtered);
+      cloud_pub_.publish(cloud_raw);
+    }
+  else
+    {
+      get3dCloud(*disparity, *info, *bgr_image, *mono_image,
+             *roi_stamped,
+             0, cloud_filtered);
+    }
 
-  cloud_pub_.publish(cloud_raw);
   cloud_filtered_pub_.publish(cloud_filtered);
   Eigen::Vector4f centroid (0., 0., 0., 0.);
   pcl::compute3DCentroid(*cloud_filtered, centroid);
