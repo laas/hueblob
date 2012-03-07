@@ -115,27 +115,28 @@ namespace
           memcpy(&mono, &(mono_image.data.at( u*mono_image.step + sizeof(char)*v )),
                  sizeof(char));
           //ROS_INFO_STREAM("Mono "<< u << " " << v << " " << (int) mono);
-          if (mono == 0 and !cloud_raw)
-            continue;
-
-          projectTo3d(j, i, disparity,  disparity_image,
-                      camera_info, x, y, z);
-          pcl::PointXYZRGB p;
-          p.x = x;
-          p.y = y;
-          p.z = z;
-          cv::Vec3b rgb = cv_rgb_ptr->image.at<cv::Vec3b>(u, v);
-          p.r = rgb[2];
-          p.g = rgb[1];
-          p.b = rgb[0];
-          //ROS_INFO_STREAM(rgb[0]);
-          cloud_raw->points.push_back(p);
-          cloud_raw->header = roi_stamped.header;
-
-          if (mono)
+          if ((mono) || (!mono && cloud_raw))
             {
-              cloud_filtered->points.push_back(p);
-              cloud_filtered->header = roi_stamped.header;
+              projectTo3d(j, i, disparity,  disparity_image,
+                          camera_info, x, y, z);
+              pcl::PointXYZRGB p;
+              p.x = x;
+              p.y = y;
+              p.z = z;
+              cv::Vec3b rgb = cv_rgb_ptr->image.at<cv::Vec3b>(u, v);
+              p.r = rgb[2];
+              p.g = rgb[1];
+              p.b = rgb[0];
+              if (mono)
+                {
+                  cloud_filtered->points.push_back(p);
+                  cloud_filtered->header = roi_stamped.header;
+                }
+              if (cloud_raw)
+                {
+                  cloud_raw->points.push_back(p);
+                  cloud_raw->header = roi_stamped.header;
+                }
             }
         }
 
