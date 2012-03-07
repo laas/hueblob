@@ -266,14 +266,15 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
                 )
 {
 
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw(new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw;
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
   // ROS_INFO_STREAM(roi_stamped->roi.x_offset << " " << roi_stamped->roi.y_offset << " "
   //                 << roi_stamped->roi.width << " " << roi_stamped->roi.height);
 
 
   if ( cloud_pub_.getNumSubscribers() != 0)
     {
+      cloud_raw = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
       get3dCloud(*disparity, *info, *bgr_image, *mono_image,
              *roi_stamped,
              cloud_raw, cloud_filtered);
@@ -282,8 +283,9 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
   else
     {
       get3dCloud(*disparity, *info, *bgr_image, *mono_image,
-             *roi_stamped,
-             0, cloud_filtered);
+                 *roi_stamped,
+                 cloud_raw,
+                 cloud_filtered);
     }
 
   cloud_filtered_pub_.publish(cloud_filtered);
