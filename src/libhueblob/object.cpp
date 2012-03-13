@@ -166,7 +166,7 @@ Object::track(const cv::Mat& image)
 
   if (algo == CAMSHIFT)
     return track_camshift(image);
-  if (algo == NAIVE)
+  else
     return track_naive(image);
 }
 
@@ -268,4 +268,11 @@ Object::track_camshift(const cv::Mat& image)
   if (searchWindow_.height <= 0 || searchWindow_.width <= 0)
     searchWindow_.x = searchWindow_.y = -1;
   return result;
+}
+
+void
+Object::setSearchWindow(const cv::Rect window)
+{
+  searchWindow_ = window;
+  return;
 }

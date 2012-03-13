@@ -40,6 +40,7 @@ struct Object {
   boost::optional<cv::RotatedRect> track(const cv::Mat& image);
   boost::optional<cv::RotatedRect> track_camshift(const cv::Mat& image);
   boost::optional<cv::RotatedRect> track_naive(const cv::Mat& image);
+  void setSearchWindow(const cv::Rect window);
 
 
   /// \brief Compute image mask used for histogram computation.

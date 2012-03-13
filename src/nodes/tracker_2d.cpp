@@ -23,10 +23,12 @@ public:
 
 private:
   void imageCallback(const sensor_msgs::ImageConstPtr& image);
+  void hintCallback(const sensor_msgs::RegionOfInterestConstPtr& roi);
 
   ros::NodeHandle nh_;
   image_transport::ImageTransport it_;
   image_transport::SubscriberFilter sub_;
+  ros::Subscriber hint_sub_;
   ros::Publisher roi_pub_;
   image_transport::Publisher tracked_image_pub_, ;
   image_transport::Publisher hsv_image_pub_, bgr_image_pub_;
@@ -62,12 +64,14 @@ Tracker2D::Tracker2D()
   cv::Mat model = cv::imread(model_path_.c_str());
   object_.addView(model);
 
+  const::string hint_topic = ros::names::resolve("blobs/" + name_ + "/hint");
   const::string roi_topic = ros::names::resolve("blobs/" + name_ + "/blob2d");
   const::string tracked_image_topic = ros::names::resolve("blobs/" + name_ + "/tracked_image");
   const::string hsv_image_topic = ros::names::resolve("blobs/" + name_ + "/hsv_image");
   const::string bgr_image_topic = ros::names::resolve("blobs/" + name_ + "/bgr_image");
   const::string gray_image_topic = ros::names::resolve("blobs/" + name_ + "/gray_image");
   const::string mono_image_topic = ros::names::resolve("blobs/" + name_ + "/mono_image");
+
 
   roi_pub_ = nh_.advertise<hueblob::RoiStamped>(roi_topic, 5);
   tracked_image_pub_ = it_.advertise(tracked_image_topic, 1);
@@ -79,10 +83,27 @@ Tracker2D::Tracker2D()
   sub_.subscribe(it_, image_topic, 5);
   sub_.registerCallback(boost::bind(&Tracker2D::imageCallback,
                                     this, _1));
+  hint_sub_ = nh_.subscribe(hint_topic, 5,
+                            &Tracker2D::hintCallback, this);
 
-  ROS_INFO_STREAM("Listening to " << image_topic);
+
+
+  ROS_INFO_STREAM("Listening to " << image_topic << ", " << hint_topic);
 
 }
+
+void Tracker2D::hintCallback(const sensor_msgs::RegionOfInterestConstPtr& roi)
+{
+  cv::Rect rect(roi->x_offset, roi->y_offset, roi->width, roi->height);
+  object_.setSearchWindow(rect);
+  ROS_INFO_STREAM("Set rect " << rect.x
+                  << " " << rect.y
+                  << " " << rect.width
+                  << " " << rect.height);
+  return;
+}
+
+
 
 void Tracker2D::imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {

@@ -444,8 +444,8 @@ namespace
     float fy = camera_info.P[1*4+1];
     float cx = camera_info.P[0*4+2];
     float cy = camera_info.P[1*4+2];
-    float Tx = camera_info.P[0*4+3];
-    float Ty = camera_info.P[1*4+3];
+    // float Tx = camera_info.P[0*4+3];
+    // float Ty = camera_info.P[1*4+3];
 
     // if (shift_correction)
     //   {
