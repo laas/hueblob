@@ -29,6 +29,29 @@ target_link_libraries(hueblob ${OpenCV_LIBS})
 # Nodes.
 #  hueblob node.
 
+include(FindPkgConfig)
+if (PKG_CONFIG_FOUND AND UNIX AND NOT APPLE)
+   pkg_check_modules(GTK gtk+-2.0)
+   if (GTK_FOUND)
+      include_directories(${GTK_INCLUDE_DIRS})
+      link_directories(${GTK_LIBRARY_DIRS})
+      add_definitions(-DHAVE_GTK)
+      # Hack around gdk-pixbuf move issues for now
+      # http://ubuntuforums.org/showthread.php?t=1596930
+      include_directories(/usr/include/gdk-pixbuf-2.0)
+   endif(GTK_FOUND)
+endif(PKG_CONFIG_FOUND AND UNIX AND NOT APPLE)
+
+
+# Nodelet library
+rosbuild_add_library(monitor src/nodelets/monitor_nodelet.cpp src/nodelets/window_thread.cpp)
+
+target_link_libraries(monitor ${GTK_LIBRARIES})
+
+# Image viewers
+rosbuild_add_executable(monitor_exe src/nodes/monitor.cpp)
+SET_TARGET_PROPERTIES(monitor_exe PROPERTIES OUTPUT_NAME monitor)
+
 rosbuild_add_executable(hueblob_node src/nodes/hueblob_node.cpp)
 target_link_libraries(hueblob_node hueblob)
 

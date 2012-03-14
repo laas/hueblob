@@ -11,6 +11,11 @@
   <review status="experimental" notes=""/>
   <url>http://ros.org/wiki/hueblob</url>
 
+  <export>
+    <cpp cflags="-I${prefix}/include" lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lmonitor" />
+    <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+  </export>
+  <depend package="nodelet"/>
   <depend package="std_msgs"/>
   <depend package="yaml_cpp"/>
   <depend package="pcl"/>

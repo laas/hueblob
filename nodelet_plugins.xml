@@ -1,0 +1,6 @@
+<library path="lib/libmonitor">
+
+  <class name="hueblob/monitor" type="hueblob::MonitorNodelet" base_class_type="nodelet::Nodelet">
+    <description>Nodelet to view a sensor_msgs/Image topic</description>
+  </class>
+</library>
