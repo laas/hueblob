@@ -20,7 +20,6 @@ typedef enum{
 struct Object {
   static const int h_bins = 25;
   static const int s_bins = 25;
-  algo_t algo;
   explicit Object();
 
 
@@ -38,8 +37,6 @@ struct Object {
   /// \return a rotated rectangle if the object has been successfully tracked,
   ///         otherwise nothing.
   boost::optional<cv::RotatedRect> track(const cv::Mat& image);
-  boost::optional<cv::RotatedRect> track_camshift(const cv::Mat& image);
-  boost::optional<cv::RotatedRect> track_naive(const cv::Mat& image);
   void setSearchWindow(const cv::Rect window);
 
 

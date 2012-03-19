@@ -71,7 +71,6 @@ HueBlob::HueBlob()
 {
   // Parameter initialization.
   ros::param::param<std::string>("~stereo", stereo_topic_prefix_, "");
-  ros::param::param<std::string>("~algo", algo_, "camshift");
   ros::param::param<std::string>("~frame", frame_, "camera_bottom_left_optical");
   ros::param::param<std::string>("~models", preload_models_, "");
   ros::param::param<bool>("~approximate_sync", is_approximate_sync_, false);
@@ -283,16 +282,6 @@ HueBlob::setupInfrastructure(const std::string& stereo_prefix)
             ros::names::append("/hueblob/", stereo_topic_prefix_ + "/blobs/" + yaml_model.name);
 
           blob_pubs_[yaml_model.name] = nh_.advertise<hueblob::Blob>(blob_topic, 5);
-          if (algo_ == "naive")
-            {
-              left_object.algo = NAIVE;
-              right_object.algo = NAIVE;
-            }
-          else if (algo_ == "camshift")
-            {
-              left_object.algo = CAMSHIFT;
-              right_object.algo = CAMSHIFT;
-            }
 
           // Emit a warning if the object already exists.
           if (left_object.anchor_x_
@@ -370,17 +359,6 @@ HueBlob::AddObjectCallback(hueblob::AddObject::Request& request,
   // Get reference on the object.
   Object& left_object = left_objects_[request.name];
   Object& right_object = right_objects_[request.name];
-  if (algo_ == "naive")
-    {
-      left_object.algo = NAIVE;
-      right_object.algo = NAIVE;
-    }
-  else if (algo_ == "camshift")
-    {
-      left_object.algo = CAMSHIFT;
-      right_object.algo = CAMSHIFT;
-    }
-
 
   // Emit a warning if the object already exists.
   if (left_object.anchor_x_

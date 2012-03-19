@@ -16,7 +16,6 @@ static const float* ranges[] = { hue_range, sat_range };
 
 Object::Object()
   :
-     algo(CAMSHIFT),
      anchor_x_(),
      anchor_y_(),
      anchor_z_(),
@@ -69,71 +68,8 @@ Object::addView(const cv::Mat& model)
   this->modelHistogram_.push_back(hist);
 
   // compute histogram and thresholds for naive method
-  getThresholds(hsv);
 }
 
-void
-Object::getThresholds(const cv::Mat& hsv_img)
-{
-  cv::Mat mask(hsv_img.size(), CV_8UC1);
-  cv::inRange(hsv_img, cv::Scalar(0,50,50),
-	      cv::Scalar(255, 255, 255),mask);
-  int channels[] = {0};
-  unsigned hbins = 255;
-  const int hist_size[] = {hbins};
-  float hranges[] = {0,255};
-  const float* ranges[] = { hranges };
-  cv::SparseMat hist;//(1, hist_size, CV_32F);
-  cv::calcHist(&hsv_img, 1, channels, mask,
-               hist, 1, hist_size,
-               ranges, true, false);
-  // normalize hist
-  cv::normalize(hist, hist, 0., cv::NORM_L1);
-  double maxVal;
-  int maxIdx;
-  minMaxLoc(hist, NULL, &maxVal, NULL, &maxIdx);
-  peak_color_[0] = maxIdx;
-  peak_color_[1] = 200;
-  peak_color_[2] = 200;
-  unsigned maxh(0), minh(255);
-  for (unsigned h = 0; h < hbins; h++)
-    {
-      int hs[] = {h};
-      if (abs(float(h) - float(maxIdx)) > 20 || hist.ref<float>(hs) < 0.1*maxVal)
-        continue;
-      maxh = std::max(maxh, h);
-      minh = std::min(minh, h);
-    }
-
-  cv::inRange(hsv_img, cv::Scalar(minh,50,50),
-	      cv::Scalar(maxh, 255, 255),mask);
-
-
-  cv::Mat hchan(hsv_img.size(), CV_8UC1);
-  cv::Mat schan(hsv_img.size(), CV_8UC1);
-  cv::Mat vchan(hsv_img.size(), CV_8UC1);
-  cv::Mat chans[] = {hchan, schan, vchan};
-  cv::split(hsv_img, chans);
-
-  minMaxLoc(hchan, &lower_hue_[0], &upper_hue_[0], 0, 0, mask);
-  minMaxLoc(schan, &lower_hue_[1], &upper_hue_[1], 0, 0, mask);
-  minMaxLoc(vchan, &lower_hue_[2], &upper_hue_[2], 0, 0, mask);
-  // Tolerance for s and v
-  upper_hue_[1] = 255;
-  upper_hue_[2] = 255;
-  // float tol = 1.1;
-  // lower[1]/= tol;o
-  // lower[2]/= tol;
-  // upper[1]*= tol;
-  // upper[2]*= tol;
-  // std::cout << maxIdx << " " << std::endl;
-  // std::cout << lower_hue_[0] << " "
-  //           << lower_hue_[1] << " "
-  //           << lower_hue_[2] << " " << std::endl;
-  // std::cout << upper_hue_[0] << " "
-  //           << upper_hue_[1] << " "
-  //           << upper_hue_[2] << " " << std::endl;
-}
 
 namespace
 {
@@ -163,56 +99,6 @@ namespace
 boost::optional<cv::RotatedRect>
 Object::track(const cv::Mat& image)
 {
-
-  if (algo == CAMSHIFT)
-    return track_camshift(image);
-  else
-    return track_naive(image);
-}
-
-boost::optional<cv::RotatedRect>
-Object::track_naive(const cv::Mat& image)
-{
-  cv::Mat imgHSV(image.rows, image.cols, CV_8UC3);
-  cv::cvtColor(image, imgHSV, CV_BGR2HSV);
-  cv::Mat  imgThreshed(image.rows, image.cols, CV_8UC1);
-  cv::inRange(imgHSV, lower_hue_,
-              upper_hue_, imgThreshed);
-  std::vector< std::vector<cv::Point2i> > contours;
-  std::vector<cv::Vec4i> hierarchy;
-  cv::dilate(imgThreshed, imgThreshed, cv::Mat() );
-  cv::erode(imgThreshed, imgThreshed, cv::Mat() );
-  cv::findContours(imgThreshed, contours,
-                   CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE );
-  typedef std::vector<cv::Point2i> Contour;
-  Contour largest_contour;
-  double max_area = 0;
-  for (  std::vector<Contour>::iterator
-           iter= contours.begin();
-         iter != contours.end(); iter++ )
-    {
-      Contour contour = *iter;
-      double area = cv::contourArea(cv::Mat(contour));
-      if (area > max_area)
-        {
-          largest_contour = contour;
-          max_area = area;
-        }
-    }
-  cv::RotatedRect rrect;
-  if (max_area > 0)
-    {
-      cv::Rect rect = cv::boundingRect(cv::Mat(largest_contour));
-      rrect.center = cv::Point2f(rect.x + rect.width/2,
-                                 rect.y + rect.height/2);
-      rrect.size = cv::Size(rect.width, rect.height);
-    }
-  return rrect;
-}
-
-boost::optional<cv::RotatedRect>
-Object::track_camshift(const cv::Mat& image)
-{
   boost::optional<cv::RotatedRect> result;
 
   int nViews = modelHistogram_.size();
@@ -226,7 +112,8 @@ Object::track_camshift(const cv::Mat& image)
   //  only use channels 0 and 1 (hue and saturation).
   int channels[] = {0, 1};
   cv::Mat backProject;
-  cv::calcBackProject(&imgHSV_, 1, channels, modelHistogram_[0], backProject,
+  cv::calcBackProject(&imgHSV_, 1, channels, modelHistogram_[0],
+                      backProject,
 		      ranges);
 
   for(int nmodel = 1; nmodel < nViews; ++nmodel)
@@ -257,11 +144,6 @@ Object::track_camshift(const cv::Mat& image)
 
   cv::TermCriteria criteria =
     cv::TermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 50, 1);
-  // std::cout << searchWindow_.width << " "
-  //           << searchWindow_.height<< " "
-  //           << searchWindow_.x << " "
-  //           << searchWindow_.y
-  //           << std::endl;
   result = cv::CamShift(backProject, searchWindow_, criteria);
   searchWindow_ = result->boundingRect();
 
