@@ -12,6 +12,8 @@
 #ifdef HAVE_GTK
 #include <gtk/gtk.h>
 #include <cv.h>
+
+
 static void destroyNode(GtkWidget *widget, gpointer data)
 {
   /// @todo On ros::shutdown(), the node hangs. Why?
@@ -46,10 +48,16 @@ class MonitorNodelet : public nodelet::Nodelet
   cv::Point clicked_p_;
   cv::Point pressed_p_;
   ros::Publisher hint_pub_;
+  bool selecting_;
+  std::string topic_;
+  ros::NodeHandle nh_;
+  image_transport::ImageTransport it_;
+  std::string transport_;
 
   virtual void onInit();
-  bool selecting_;
   void imageCb(const sensor_msgs::ImageConstPtr& msg);
+  static void trackButtonCb(GtkWidget *widget,
+                            gpointer   data );
 
   static void mouseCb(int event, int x, int y, int flags, void* param);
 
@@ -62,10 +70,13 @@ public:
 
 MonitorNodelet::MonitorNodelet()
   : filename_format_(""),
+    nh_(),
+    it_(nh_),
     count_(0),
     clicked_p_(),
     pressed_p_(),
-    selecting_(false)
+    selecting_(false),
+    topic_()
 {
 }
 
@@ -78,17 +89,17 @@ void MonitorNodelet::onInit()
 {
   NODELET_DEBUG("Initializing nodelet");
 
-  ros::NodeHandle nh = getNodeHandle();
+  nh_ = getNodeHandle();
   ros::NodeHandle local_nh = getPrivateNodeHandle();
   // Command line argument parsing
   const std::vector<std::string>& argv = getMyArgv();
   // First positional argument is the transport type
-  std::string transport = "raw";
+  transport_ = "raw";
   for (int i = 0; i < (int)argv.size(); ++i)
   {
     if (argv[i][0] != '-')
     {
-      transport = argv[i];
+      transport_ = argv[i];
       break;
     }
   }
@@ -97,8 +108,8 @@ void MonitorNodelet::onInit()
                                      "--shutdown-on-close") != argv.end();
 
   // Default window name is the resolved topic name
-  std::string topic = nh.resolveName("image");
-  local_nh.param("window_name", window_name_, topic);
+  topic_ = nh_.resolveName("image");
+  local_nh.param("window_name", window_name_, topic_);
 
   bool autosize;
   local_nh.param("autosize", autosize, false);
@@ -107,7 +118,7 @@ void MonitorNodelet::onInit()
   local_nh.param("filename_format", format_string, std::string("frame%04i.jpg"));
   filename_format_.parse(format_string);
 
-  std::string hint_topic = nh.resolveName("hint");
+  std::string hint_topic = nh_.resolveName("hint");
   hint_pub_ = local_nh.advertise<sensor_msgs::RegionOfInterest>(hint_topic, 1);
 
   cv::namedWindow(window_name_, autosize ? CV_WINDOW_AUTOSIZE : 0);
@@ -115,18 +126,59 @@ void MonitorNodelet::onInit()
 
 #ifdef HAVE_GTK
   // Register appropriate handler for when user closes the display window
-  GtkWidget *widget = GTK_WIDGET( cvGetWindowHandle(window_name_.c_str()) );
+  GtkWidget *control_w = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title(GTK_WINDOW(control_w), "Monitor");
+  gtk_window_set_default_size (GTK_WINDOW(control_w), 200,500);
+  GtkWidget *vbox = gtk_vbox_new(false, 0);
+  gtk_container_add (GTK_CONTAINER (control_w), vbox);
+
+  GtkWidget *hbox_top = gtk_hbox_new(false, 0);
+  gtk_box_pack_start(GTK_BOX(vbox), hbox_top, false, false, 0);
+
+  GtkWidget *track_button = gtk_check_button_new_with_label("Track");
+  gtk_box_pack_start(GTK_BOX(hbox_top), track_button, false, false, 0);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(track_button), true);
+  g_signal_connect (track_button, "toggled",
+                    G_CALLBACK (&MonitorNodelet::trackButtonCb), this);
+
+  gtk_widget_show_all (control_w);
+  GtkWidget *image_w = GTK_WIDGET( cvGetWindowHandle(window_name_.c_str()) );
   if (shutdown_on_close)
-    g_signal_connect(widget, "destroy", G_CALLBACK(destroyNode), NULL);
+    {
+      g_signal_connect(image_w, "destroy", G_CALLBACK(destroyNode), NULL);
+      g_signal_connect(control_w, "destroy", G_CALLBACK(destroyNode), NULL);
+    }
   else
-    g_signal_connect(widget, "destroy", G_CALLBACK(destroyNodelet), &sub_);
+    {
+      g_signal_connect(image_w, "destroy", G_CALLBACK(destroyNodelet), &sub_);
+      g_signal_connect(control_w, "destroy", G_CALLBACK(destroyNodelet), &sub_);
+    }
+
 #endif
 
   // Start the OpenCV window thread so we don't have to waitKey() somewhere
   startWindowThread();
 
-  image_transport::ImageTransport it(nh);
-  sub_ = it.subscribe(topic, 1, &MonitorNodelet::imageCb, this, transport);
+  it_ = image_transport::ImageTransport(nh_);
+  sub_ = it_.subscribe(topic_, 1, &MonitorNodelet::imageCb, this, transport_);
+}
+
+void MonitorNodelet::trackButtonCb(GtkWidget *widget,
+                                   gpointer   data
+                                   )
+{
+  bool state =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
+  MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(data);
+  if (!state)
+    {
+      this_->sub_.shutdown();
+    }
+
+  else if (state)
+    {
+      this_->sub_ = this_->it_.subscribe(this_->topic_, 1, &MonitorNodelet::imageCb, this_,
+                                 this_->transport_);
+    }
 }
 
 void MonitorNodelet::imageCb(const sensor_msgs::ImageConstPtr& msg)
