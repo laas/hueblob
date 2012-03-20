@@ -14,6 +14,7 @@ int main(int argc, char **argv)
   nodelet::V_string my_argv(argv + 1, argv + argc);
   my_argv.push_back("--shutdown-on-close"); // Internal
 
+  ROS_INFO("Loading nodelet");
   manager.load(ros::this_node::getName(), "hueblob/monitor", remappings, my_argv);
 
   ros::spin();

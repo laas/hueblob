@@ -45,14 +45,14 @@ class MonitorNodelet : public nodelet::Nodelet
 
   cv::Point clicked_p_;
   cv::Point pressed_p_;
-  cv::Rect selected_rect_;
   ros::Publisher hint_pub_;
 
   virtual void onInit();
-
+  bool selecting_;
   void imageCb(const sensor_msgs::ImageConstPtr& msg);
 
   static void mouseCb(int event, int x, int y, int flags, void* param);
+
 
 public:
   MonitorNodelet();
@@ -61,7 +61,11 @@ public:
 };
 
 MonitorNodelet::MonitorNodelet()
-  : filename_format_(""), count_(0), clicked_p_(), pressed_p_(), selected_rect_()
+  : filename_format_(""),
+    count_(0),
+    clicked_p_(),
+    pressed_p_(),
+    selecting_(false)
 {
 }
 
@@ -175,7 +179,7 @@ void MonitorNodelet::imageCb(const sensor_msgs::ImageConstPtr& msg)
   // OpenCV's window mutex.
   monitor_mutex_.unlock();
   if (!last_image_.empty())
-    if (selected_rect_.width && selected_rect_.height)
+    if (selecting_)
       {
         static const cv::Scalar color = CV_RGB(0,255,0);
         cv::rectangle(last_image_, clicked_p_, pressed_p_, color, 1);
@@ -186,42 +190,36 @@ void MonitorNodelet::imageCb(const sensor_msgs::ImageConstPtr& msg)
 void MonitorNodelet::mouseCb(int event, int x, int y, int flags, void* param)
 {
   MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(param);
-  // Trick to use NODELET_* logging macros in static function
-  boost::function<const std::string&()> getName =
-    boost::bind(&MonitorNodelet::getName, this_);
 
-  if (event == CV_EVENT_LBUTTONDOWN)
-  {
-    NODELET_WARN_ONCE("Left-clicking no longer saves images. Right-click instead.");
-    this_->clicked_p_.x = x;
-    this_->clicked_p_.y = y;
-    return;
-  }
-  else if (event == CV_EVENT_LBUTTONUP)
-    {
-      this_->clicked_p_ = cv::Point();
-      this_->pressed_p_ = cv::Point();
-      this_->selected_rect_ = cv::Rect();
-    }
-
-  else if (flags == CV_EVENT_FLAG_LBUTTON)
+  if  (this_->selecting_)
     {
       this_->pressed_p_.x = x;
       this_->pressed_p_.y = y;
-
-      this_->selected_rect_.x = std::min(this_->clicked_p_.x, this_->pressed_p_.x);
-      this_->selected_rect_.y = std::min(this_->clicked_p_.y, this_->pressed_p_.y);
-      this_->selected_rect_.width  = std::abs(this_->clicked_p_.x - this_->pressed_p_.x);
-      this_->selected_rect_.height = std::abs(this_->clicked_p_.y - this_->pressed_p_.y);
-
-      sensor_msgs::RegionOfInterest msg;
-      msg.x_offset = this_->selected_rect_.x;
-      msg.y_offset = this_->selected_rect_.y;
-      msg.width    = this_->selected_rect_.width;
-      msg.height   = this_->selected_rect_.height;
-
-      this_->hint_pub_.publish(msg);
     }
+
+  // Trick to use NODELET_* logging macros in static function
+  boost::function<const std::string&()> getName =
+    boost::bind(&MonitorNodelet::getName, this_);
+  if (event == CV_EVENT_LBUTTONDOWN)
+  {
+    NODELET_WARN_ONCE("Left-clicking no longer saves images. Right-click instead.");
+    this_->selecting_ = ! this_->selecting_;
+
+    if (this_->selecting_)
+      {
+        this_->clicked_p_.x = x;
+        this_->clicked_p_.y = y;
+      }
+    else
+      {
+        sensor_msgs::RegionOfInterest msg;
+        msg.x_offset = std::min(this_->clicked_p_.x, this_->pressed_p_.x);
+        msg.y_offset = std::min(this_->clicked_p_.y, this_->pressed_p_.y);
+        msg.width    = std::abs(this_->clicked_p_.x - this_->pressed_p_.x);
+        msg.height   = std::abs(this_->clicked_p_.y - this_->pressed_p_.y);
+        this_->hint_pub_.publish(msg);
+      }
+  }
 
   if (event != CV_EVENT_RBUTTONDOWN)
     return;

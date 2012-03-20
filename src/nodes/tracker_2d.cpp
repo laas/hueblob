@@ -112,14 +112,14 @@ namespace
     //                 << rrect.angle);
     CvPoint2D32f box_vtx[4];
     cvBoxPoints(rrect, box_vtx);
-
+    bool res = true;
     cv::Point pt0, pt;
     pt0.x = cvRound(box_vtx[3].x);
     pt0.y = cvRound(box_vtx[3].y);
 
     if( (pt0.x <= 0) || (pt0.x >= im.cols)
         || (pt0.y <= 0) ||( pt0.y >= im.rows))
-      return false;
+      res = false;
 
     for(int i = 0; i < 4; i++ )
       {
@@ -127,11 +127,11 @@ namespace
         pt.y = cvRound(box_vtx[i].y);
         if ( (pt.x <= 0) || (pt.x >= im.cols)
              || (pt.y <= 0) || (pt.y >= im.rows) )
-          return false;
+          res = false;
         cv::line(im, pt0, pt, color, 1, CV_AA, 0);
         pt0 = pt;
       }
-    return true;
+    return res;
   }
 }
 
@@ -241,7 +241,23 @@ void Tracker2D::imageCallback(const sensor_msgs::ImageConstPtr& msg)
 
       roi_pub_.publish(r);
       rrect_pub_.publish(rrect_msg);
+    }
+  else if ( tracked_image_pub_.getNumSubscribers() != 0)
+    {
+      cv::Point p1(0, 20);
+      cv::Point p2(0, 40);
+      std::stringstream ss (std::stringstream::in | std::stringstream::out);
+      ss << "INVALID RRECT " << rrect->center.x << " " << rrect->center.y
+         << " " << rrect->size.width << " " << rrect->size.height
+         << " " << rrect->angle;
+      cv::putText(cv_ptr_->image, ss.str(), p1, CV_FONT_HERSHEY_SIMPLEX,
+                  0.5, color);
+      std::stringstream ss2 (std::stringstream::in | std::stringstream::out);
 
+      ss2 << "         RECT " << rect.x << " " << rect.y
+          << " " << rect.width << " " << rect.height;
+      cv::putText(cv_ptr_->image, ss2.str(), p2, CV_FONT_HERSHEY_SIMPLEX,
+                  0.5, color);
     }
 
 
