@@ -221,7 +221,6 @@ void MonitorNodelet::mouseCb(int event, int x, int y, int flags, void* param)
       msg.height   = this_->selected_rect_.height;
 
       this_->hint_pub_.publish(msg);
-
     }
 
   if (event != CV_EVENT_RBUTTONDOWN)

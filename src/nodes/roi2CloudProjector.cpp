@@ -94,6 +94,11 @@ namespace
   {
     namespace enc = sensor_msgs::image_encodings;
     cv_bridge::CvImagePtr cv_rgb_ptr  = cv_bridge::toCvCopy(bgr_image, enc::BGR8);
+    ROS_ASSERT(bgr_image.width     == mono_image.width
+               && bgr_image.height == mono_image.height
+               && bgr_image.width  == roi_stamped.roi.width
+               && bgr_image.height == roi_stamped.roi.height
+               );
     //cv_bridge::CvImagePtr cv_mono_ptr = cv_bridge::toCvCopy(mono_image, enc::MONO8);
 
     const sensor_msgs::RegionOfInterest roi = roi_stamped.roi;
@@ -206,10 +211,10 @@ Projector::Projector()
     disparity_sub_(),
     br_()
 {
-  string blob2d_topic, blob3d_topic, disparity_topic, cloud_topic, blob_name, \
+  string roi_topic, blob3d_topic, disparity_topic, cloud_topic, blob_name, \
     camera_info_topic, bgr_image_topic, mono_image_topic, \
     cloud_filtered_topic, marker_topic;
-  ros::param::param<string>("~blob2d", blob2d_topic, "blobs/rose/blob2d");
+  ros::param::param<string>("~roi", roi_topic, "blobs/rose/roi");
   ros::param::param<string>("~blob3d", blob3d_topic, "blobs/rose/blob3d");
   ros::param::param<string>("~disparity", disparity_topic, "disparity");
   ros::param::param<string>("~camera_info", camera_info_topic, "left/camera_info");
@@ -218,7 +223,7 @@ Projector::Projector()
   ros::param::param<string>("~blob_name", blob_name, "rose");
 
 
-  blob2d_topic         = ros::names::resolve(blob2d_topic);
+  roi_topic            = ros::names::resolve(roi_topic);
   blob3d_topic         = ros::names::resolve(blob3d_topic);
   disparity_topic      = ros::names::resolve(disparity_topic);
   cloud_topic          = ros::names::resolve(cloud_topic);
@@ -235,7 +240,7 @@ Projector::Projector()
   cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
   blob3d_pub_  = nh_.advertise<hueblob::Blob> (blob3d_topic, 1);
 
-  roi_sub_.subscribe(nh_, blob2d_topic, 10);
+  roi_sub_.subscribe(nh_, roi_topic, 10);
   camera_info_sub_.subscribe(nh_, camera_info_topic, 10);
   bgr_image_sub_.subscribe(it_, bgr_image_topic, 10);
   mono_image_sub_.subscribe(it_, mono_image_topic, 10);
@@ -246,7 +251,7 @@ Projector::Projector()
                                      this, _1, _2, _3, _4, _5));
 
   ROS_INFO_STREAM(endl<< "Listening to:"
-                  << "\n\t* " << blob2d_topic
+                  << "\n\t* " << roi_topic
                   << "\n\t* " << disparity_topic
                   << "\n\t* " << camera_info_topic
                   << "\n\t* " << bgr_image_topic
