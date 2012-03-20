@@ -19,6 +19,7 @@
 #include <sensor_msgs/image_encodings.h>
 #include <visualization_msgs/Marker.h>
 #include <hueblob/Blob.h>
+#include <hueblob/Density.h>
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -89,7 +90,8 @@ namespace
                   const sensor_msgs::Image &mono_image,
                   const hueblob::RoiStamped & roi_stamped,
                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw,
-                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
+                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered,
+                  float& density
                   )
   {
     namespace enc = sensor_msgs::image_encodings;
@@ -101,24 +103,37 @@ namespace
                );
     //cv_bridge::CvImagePtr cv_mono_ptr = cv_bridge::toCvCopy(mono_image, enc::MONO8);
 
+    unsigned total_points(0);
+    unsigned with_depth_points(0);
     const sensor_msgs::RegionOfInterest roi = roi_stamped.roi;
     for (unsigned i = roi.y_offset; i < roi.y_offset + roi.height; ++i)
       for (unsigned j = roi.x_offset; j < roi.x_offset + roi.width; ++j)
         {
-          if (!hasDisparityValue(disparity_image, i, j))
-            continue;
+          unsigned char mono;
           float disparity, x, y, z;
           unsigned u = i - roi.y_offset;
           unsigned v = j - roi.x_offset;
+
+          memcpy(&mono, &(mono_image.data.at( u*mono_image.step + sizeof(char)*v )),
+                 sizeof(char));
+
+          if (mono)
+            {
+              total_points++;
+            }
+
+          if (!hasDisparityValue(disparity_image, i, j))
+            continue;
+          else if (mono)
+            with_depth_points++;
+
           getPoint(disparity_image.image, i, j, disparity);
           ROS_ASSERT(disparity_image.max_disparity != 0.0);
-          if (disparity == 0)
+
+          if (disparity == 0. )
             continue;
 
 
-          unsigned char mono;
-          memcpy(&mono, &(mono_image.data.at( u*mono_image.step + sizeof(char)*v )),
-                 sizeof(char));
           //ROS_INFO_STREAM("Mono "<< u << " " << v << " " << (int) mono);
           if ((mono) || (!mono && cloud_raw))
             {
@@ -156,6 +171,7 @@ namespace
       }
     sor.setInputCloud (cloud_filtered);
     sor.filter (*cloud_filtered);
+    density = (float)(with_depth_points)/(float)(total_points);
   }
 
 } // end of anonymous namespace.
@@ -194,7 +210,8 @@ private:
   message_filters::Subscriber<sensor_msgs::CameraInfo> camera_info_sub_;
   message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
   image_transport::SubscriberFilter bgr_image_sub_, mono_image_sub_;
-  ros::Publisher cloud_pub_, cloud_filtered_pub_, marker_pub_, blob3d_pub_;
+  ros::Publisher cloud_pub_, cloud_filtered_pub_;
+  ros::Publisher marker_pub_, blob3d_pub_, transform_pub_, density_pub_;
 
 
   tf::TransformBroadcaster br_;
@@ -213,7 +230,7 @@ Projector::Projector()
 {
   string roi_topic, blob3d_topic, disparity_topic, cloud_topic, blob_name, \
     camera_info_topic, bgr_image_topic, mono_image_topic, \
-    cloud_filtered_topic, marker_topic;
+    cloud_filtered_topic, marker_topic, transform_topic, density_topic;
   ros::param::param<string>("~roi", roi_topic, "blobs/rose/roi");
   ros::param::param<string>("~blob3d", blob3d_topic, "blobs/rose/blob3d");
   ros::param::param<string>("~disparity", disparity_topic, "disparity");
@@ -234,11 +251,16 @@ Projector::Projector()
   cloud_filtered_topic = ros::names::append(base_name_, "points/filtered");
   marker_topic         = ros::names::append(base_name_, "points/marker");
   cloud_topic          = ros::names::append(base_name_, "points/raw");
+  transform_topic      = ros::names::append(base_name_, "transform");
+  density_topic        = ros::names::append(base_name_, "density");
 
   cloud_filtered_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_filtered_topic, 1);
   marker_pub_ = nh_.advertise<visualization_msgs::Marker>  (marker_topic, 1);
   cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
   blob3d_pub_  = nh_.advertise<hueblob::Blob> (blob3d_topic, 1);
+  transform_pub_ = nh_.advertise<geometry_msgs::TransformStamped>(transform_topic, 1);
+  density_pub_ = nh_.advertise<hueblob::Density>(density_topic, 1);
+
 
   roi_sub_.subscribe(nh_, roi_topic, 10);
   camera_info_sub_.subscribe(nh_, camera_info_topic, 10);
@@ -277,13 +299,14 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
   // ROS_INFO_STREAM(roi_stamped->roi.x_offset << " " << roi_stamped->roi.y_offset << " "
   //                 << roi_stamped->roi.width << " " << roi_stamped->roi.height);
 
-
+  float density(-1.);
   if ( cloud_pub_.getNumSubscribers() != 0)
     {
       cloud_raw = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
       get3dCloud(*disparity, *info, *bgr_image, *mono_image,
-             *roi_stamped,
-             cloud_raw, cloud_filtered);
+                 *roi_stamped,
+                 cloud_raw, cloud_filtered,
+                 density);
       cloud_pub_.publish(cloud_raw);
     }
   else
@@ -291,7 +314,8 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
       get3dCloud(*disparity, *info, *bgr_image, *mono_image,
                  *roi_stamped,
                  cloud_raw,
-                 cloud_filtered);
+                 cloud_filtered,
+                 density);
     }
 
   cloud_filtered_pub_.publish(cloud_filtered);
@@ -323,17 +347,23 @@ void Projector::callback(const sensor_msgs::CameraInfoConstPtr& info,
   blob.cloud_centroid.transform.rotation.y = 0.;
   blob.cloud_centroid.transform.rotation.z = 0.;
   blob.cloud_centroid.transform.rotation.w = 1.;
-  blob.cloud_centroid.header.stamp = roi_stamped->header.stamp;
-  blob.depth_density = 1.*cloud_filtered->points.size()/(roi_stamped->roi.width*
-							 roi_stamped->roi.height);
+  blob.cloud_centroid.header = roi_stamped->header;
+  blob.depth_density = density;
   blob.boundingbox_2d.resize(4);
   blob.boundingbox_2d[0] = roi_stamped->roi.x_offset;
   blob.boundingbox_2d[1] = roi_stamped->roi.y_offset;
   blob.boundingbox_2d[2] = roi_stamped->roi.width;
   blob.boundingbox_2d[3] = roi_stamped->roi.height;
 
+  hueblob::Density dm;
+  dm.header = roi_stamped->header;
+  dm.data = density;
+
   blob.header = roi_stamped->header;
   blob3d_pub_.publish(blob);
+  transform_pub_.publish(blob.cloud_centroid);
+  density_pub_.publish(dm);
+
 }
 
 int main(int argc, char **argv)
