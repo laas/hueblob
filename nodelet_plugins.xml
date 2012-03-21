@@ -1,6 +1,13 @@
-<library path="lib/libmonitor">
-
+<library path="lib/libnodelet">
   <class name="hueblob/monitor" type="hueblob::MonitorNodelet" base_class_type="nodelet::Nodelet">
-    <description>Nodelet to view a sensor_msgs/Image topic</description>
+    <description>Monitor, modify and debug blob tracking</description>
+  </class>
+
+  <class name="hueblob/tracker_2d" type="hueblob::Tracker2DNodelet" base_class_type="nodelet::Nodelet">
+    <description>Tracker 2D</description>
+  </class>
+
+  <class name="hueblob/projector" type="hueblob::ProjectorNodelet" base_class_type="nodelet::Nodelet">
+    <description>Tracker 2D</description>
   </class>
 </library>

@@ -3,7 +3,7 @@
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "tracker_2d", ros::init_options::AnonymousName);
+  ros::init(argc, argv, "projector", ros::init_options::AnonymousName);
   // if (ros::names::remap("image") == "image") {
   //   ROS_WARN("Topic 'image' has not been remapped! Typical command-line usage:\n"
   //            "\t$ rosrun image_view image_view image:=<image topic> [transport]");
@@ -14,7 +14,7 @@ int main(int argc, char **argv)
   nodelet::V_string my_argv(argv , argv + argc);
 
   ROS_INFO("Loading nodelet");
-  manager.load(ros::this_node::getName(), "hueblob/tracker_2d", remappings, my_argv);
+  manager.load(ros::this_node::getName(), "hueblob/projector", remappings, my_argv);
 
   ros::spin();
   return 0;

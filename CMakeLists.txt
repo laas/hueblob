@@ -20,6 +20,7 @@ rosbuild_genmsg()
 rosbuild_gensrv()
 
 # Library.
+# OLD NODES
 find_package(OpenCV REQUIRED)
 message(STATUS OpenCV libs: ${OpenCV_LIBS})
 rosbuild_add_library(hueblob
@@ -28,6 +29,9 @@ rosbuild_add_library(hueblob
 target_link_libraries(hueblob ${OpenCV_LIBS})
 # Nodes.
 #  hueblob node.
+rosbuild_add_executable(hueblob_node src/nodes/hueblob_node.cpp)
+target_link_libraries(hueblob_node hueblob)
+# OLDNODE
 
 include(FindPkgConfig)
 if (PKG_CONFIG_FOUND AND UNIX AND NOT APPLE)
@@ -44,22 +48,18 @@ endif(PKG_CONFIG_FOUND AND UNIX AND NOT APPLE)
 
 
 # Nodelet library
-rosbuild_add_library(monitor src/nodelets/monitor_nodelet.cpp src/nodelets/window_thread.cpp)
+rosbuild_add_library(nodelet
+  src/nodelets/monitor_nodelet.cpp
+  src/nodelets/tracker_2d_nodelet.cpp
+  src/nodelets/projector_nodelet.cpp
+  src/nodelets/window_thread.cpp)
 
-target_link_libraries(monitor ${GTK_LIBRARIES})
+target_link_libraries(nodelet hueblob ${GTK_LIBRARIES})
 
-# Image viewers
-rosbuild_add_executable(monitor_exe src/nodes/monitor.cpp)
-SET_TARGET_PROPERTIES(monitor_exe PROPERTIES OUTPUT_NAME monitor)
 
-rosbuild_add_executable(hueblob_node src/nodes/hueblob_node.cpp)
-target_link_libraries(hueblob_node hueblob)
-
+rosbuild_add_executable(monitor src/nodes/monitor.cpp)
 rosbuild_add_executable(tracker_2d src/nodes/tracker_2d.cpp)
-target_link_libraries(tracker_2d hueblob)
-
-rosbuild_add_executable(roi2CloudProjector src/nodes/roi2CloudProjector.cpp)
-target_link_libraries(roi2CloudProjector hueblob)
+rosbuild_add_executable(projector src/nodes/projector.cpp)
 
 # fake_camera_synchronizer_node node.
 rosbuild_add_executable(
