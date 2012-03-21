@@ -30,7 +30,8 @@ struct Object {
   ///
   /// \param view reference to the view
   void addView(const cv::Mat& view);
-  void getThresholds(const cv::Mat& hsv_img);
+  void clearViews();
+
   /// \brief Track the object in the current image.
   ///
   /// \param image track in which the object will be tracked.
@@ -72,6 +73,7 @@ struct Object {
   /// successfully tracked.
   cv::Rect searchWindow_;
   cv::Mat imgHSV_;
+
 };
 
 #endif //! HUEBLOB_OBJECT_HH

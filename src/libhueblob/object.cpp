@@ -158,6 +158,12 @@ Object::track(const cv::Mat& image)
 }
 
 void
+Object::clearViews()
+{
+  modelHistogram_.clear();
+}
+
+void
 Object::setSearchWindow(const cv::Rect window)
 {
   searchWindow_ = window;

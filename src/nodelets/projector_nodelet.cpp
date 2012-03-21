@@ -189,14 +189,14 @@ namespace hueblob {
                   const sensor_msgs::ImageConstPtr& bgr_image,
                   const sensor_msgs::ImageConstPtr& mono_image,
                   const stereo_msgs::DisparityImageConstPtr& disparity,
-                  const hueblob::RoiStampedConstPtr& box
+                  const RoiStampedConstPtr& box
                   );
 
     typedef message_filters::sync_policies::ApproximateTime< sensor_msgs::CameraInfo,
                                                              sensor_msgs::Image,
                                                              sensor_msgs::Image,
                                                              stereo_msgs::DisparityImage,
-                                                             hueblob::RoiStamped
+                                                             RoiStamped
                                                              > ApproximatePolicy;
     typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
     virtual void onInit();
@@ -204,7 +204,7 @@ namespace hueblob {
     ros::NodeHandle nh_;
     image_transport::ImageTransport it_;
     ApproximateSync sync_;
-    message_filters::Subscriber<hueblob::RoiStamped> roi_sub_;
+    message_filters::Subscriber<RoiStamped> roi_sub_;
     message_filters::Subscriber<sensor_msgs::CameraInfo> camera_info_sub_;
     message_filters::Subscriber<stereo_msgs::DisparityImage> disparity_sub_;
     image_transport::SubscriberFilter bgr_image_sub_, mono_image_sub_;
@@ -253,9 +253,9 @@ namespace hueblob {
     cloud_filtered_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_filtered_topic, 1);
     marker_pub_ = nh_.advertise<visualization_msgs::Marker>  (marker_topic, 1);
     cloud_pub_  = nh_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > (cloud_topic, 1);
-    blob3d_pub_  = nh_.advertise<hueblob::Blob> (blob3d_topic, 1);
+    blob3d_pub_  = nh_.advertise<Blob> (blob3d_topic, 1);
     transform_pub_ = nh_.advertise<geometry_msgs::TransformStamped>(transform_topic, 1);
-    density_pub_ = nh_.advertise<hueblob::Density>(density_topic, 1);
+    density_pub_ = nh_.advertise<Density>(density_topic, 1);
 
 
     roi_sub_.subscribe(nh_, roi_topic, 10);
@@ -264,7 +264,8 @@ namespace hueblob {
     mono_image_sub_.subscribe(it_, mono_image_topic, 10);
     disparity_sub_.subscribe(nh_, disparity_topic, 10);
 
-    sync_.connectInput(camera_info_sub_, bgr_image_sub_, mono_image_sub_, disparity_sub_, roi_sub_);
+    sync_.connectInput(camera_info_sub_, bgr_image_sub_,
+                       mono_image_sub_, disparity_sub_, roi_sub_);
     sync_.registerCallback(boost::bind(&ProjectorNodelet::callback,
                                        this, _1, _2, _3, _4, _5));
 
@@ -286,7 +287,7 @@ namespace hueblob {
                                   const sensor_msgs::ImageConstPtr& bgr_image,
                                   const sensor_msgs::ImageConstPtr& mono_image,
                                   const stereo_msgs::DisparityImageConstPtr& disparity,
-                                  const hueblob::RoiStampedConstPtr& roi_stamped
+                                  const RoiStampedConstPtr& roi_stamped
                                   )
   {
 
@@ -335,7 +336,7 @@ namespace hueblob {
                                            ros::names::append(base_name_, "centroid")
                                            )
                       );
-    hueblob::Blob blob;
+    Blob blob;
     blob.cloud_centroid.transform.translation.x = centroid[0];
     blob.cloud_centroid.transform.translation.y = centroid[1];
     blob.cloud_centroid.transform.translation.z = centroid[2];
@@ -351,7 +352,7 @@ namespace hueblob {
     blob.boundingbox_2d[2] = roi_stamped->roi.width;
     blob.boundingbox_2d[3] = roi_stamped->roi.height;
 
-    hueblob::Density dm;
+    Density dm;
     dm.header = roi_stamped->header;
     dm.data = density;
 

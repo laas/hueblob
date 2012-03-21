@@ -4,10 +4,10 @@
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "monitor", ros::init_options::AnonymousName);
-  if (ros::names::remap("image") == "image") {
-    ROS_WARN("Topic 'image' has not been remapped! Typical command-line usage:\n"
-             "\t$ rosrun image_view image_view image:=<image topic> [transport]");
-  }
+  // if (ros::names::remap("image") == "image") {
+  //   ROS_WARN("Topic 'image' has not been remapped! Typical command-line usage:\n"
+  //            "\t$ rosrun image_view image_view image:=<image topic> [transport]");
+  // }
 
   nodelet::Loader manager(false);
   nodelet::M_string remappings;
