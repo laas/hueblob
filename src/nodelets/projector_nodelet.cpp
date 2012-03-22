@@ -215,6 +215,7 @@ namespace hueblob {
 
     tf::TransformBroadcaster br_;
     std::string base_name_;
+    std::string frame_name_;
   };
 
 
@@ -238,6 +239,7 @@ namespace hueblob {
     ros::NodeHandle local_nh = getPrivateNodeHandle();
 
     local_nh.getParam("name", name_ );
+    local_nh.param("frame_name", frame_name_, std::string("roseball"));
 
     roi_topic            = ros::names::resolve("blobs/" + name_ + "/roi");
     blob3d_topic         = ros::names::resolve("blobs/" + name_ + "/blob3d");
@@ -334,7 +336,7 @@ namespace hueblob {
     transform.setOrigin(tf::Vector3(centroid[0],centroid[1],centroid[2]));
     br_.sendTransform(tf::StampedTransform(transform, roi_stamped->header.stamp,
                                            roi_stamped->header.frame_id,
-                                           ros::names::append(base_name_, "centroid")
+                                           frame_name_
                                            )
                       );
     Blob blob;
