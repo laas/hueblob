@@ -30,5 +30,6 @@
   <depend package="cv_bridge"/>
   <depend package="bullet"/>
   <depend package="visualization_msgs"/>
+  <depend package="roslib"/>
   <rosdep name="opencv2.3"/>
 </package>

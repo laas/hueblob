@@ -99,7 +99,8 @@ namespace
     cv_bridge::CvImagePtr cv_rgb_ptr  = cv_bridge::toCvCopy(bgr_image, enc::BGR8);
     ROS_ASSERT(bgr_image.width     == mono_image.width
                && bgr_image.height == mono_image.height
-               && bgr_image.width  == roi_stamped.roi.width
+               );
+    ROS_ASSERT(bgr_image.width     == roi_stamped.roi.width
                && bgr_image.height == roi_stamped.roi.height
                );
     //cv_bridge::CvImagePtr cv_mono_ptr = cv_bridge::toCvCopy(mono_image, enc::MONO8);

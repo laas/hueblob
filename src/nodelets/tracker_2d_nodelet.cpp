@@ -215,8 +215,6 @@ namespace hueblob {
   void Tracker2DNodelet::imageCallback(const sensor_msgs::ImageConstPtr&
                                        msg)
   {
-
-
     static const cv::Scalar white  = CV_RGB(255,255,255);
 
     try
@@ -248,14 +246,6 @@ namespace hueblob {
       }
     cv::Rect rect = rrect->boundingRect();
 
-    RoiStamped r;
-    r.header = msg->header;
-    r.roi.x_offset = rect.x;
-    r.roi.y_offset = rect.y;
-    r.roi.width = rect.width;
-    r.roi.height = rect.height;
-    r.roi.do_rectify = true;
-
     RotatedRectStamped rrect_msg;
     rrect_msg.header = msg->header;
     rrect_msg.rrect.x = rrect->center.x;
@@ -265,7 +255,6 @@ namespace hueblob {
     rrect_msg.rrect.angle = rrect->angle;
 
     //ROS_WARN_STREAM("Publish" << r);
-    roi_pub_.publish(r);
     rrect_pub_.publish(rrect_msg);
 
     if ( rrect && tracked_image_pub_.getNumSubscribers() != 0)
@@ -279,6 +268,14 @@ namespace hueblob {
         0 <= rect.y && 0 <= rect.height &&
         rect.y + rect.height < cv_ptr_->image.rows)
       {
+
+        RoiStamped r;
+        r.header = msg->header;
+        r.roi.x_offset = rect.x;
+        r.roi.y_offset = rect.y;
+        r.roi.width = rect.width;
+        r.roi.height = rect.height;
+        r.roi.do_rectify = true;
 
         hsv_ptr_->header = cv_ptr_->header;
         hsv_ptr_->encoding = cv_ptr_->encoding;
@@ -303,11 +300,10 @@ namespace hueblob {
         cv::fillConvexPoly(ecc, &poly[0], poly.size(), white);
         cv::cvtColor(ecc, mono_ptr_->image, CV_BGR2GRAY);
 
+        roi_pub_.publish(r);
         hsv_image_pub_.publish(hsv_ptr_->toImageMsg());
         bgr_image_pub_.publish(bgr_ptr_->toImageMsg());
         mono_image_pub_.publish(mono_ptr_->toImageMsg());
-
-
       }
 
 

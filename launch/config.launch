@@ -1,0 +1,3 @@
+<launch>
+<param name='/wide/tracker_2d/model' value='/home/nddang/src/ros/hueblob/data/models/rose_0003.png'/>
+</launch>
