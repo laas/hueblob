@@ -12,8 +12,7 @@
       <param name="name" value="rose" />
     </node>
 
-    <node pkg="nodelet" type="nodelet" name="monitor"
-          args="load hueblob/monitor hueblob_manager">
+    <node pkg="hueblob" type="monitor" name="monitor">
     </node>
 
   </group>
