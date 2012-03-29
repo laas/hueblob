@@ -8,7 +8,7 @@
     </node>
 
     <node pkg="nodelet" type="nodelet" name="projector"
-          args="load hueblob/projector hueblob_manager">
+          args="load hueblob/projector hueblob_manager" respawn="true">
       <param name="name" value="rose" />
     </node>
 
