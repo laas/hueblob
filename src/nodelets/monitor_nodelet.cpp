@@ -144,7 +144,9 @@ void MonitorNodelet::onInit()
 
 
   local_nh.param("name", blob_name_,  std::string("rose"));
-  topic_         = ros::names::resolve("left/image_rect_color");
+  local_nh.param("image" , topic_, std::string("left/image_rect_color"));
+
+  topic_         = ros::names::resolve(topic_);
 
   local_nh.param("window_name", window_name_, topic_);
 

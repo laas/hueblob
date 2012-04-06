@@ -1,10 +1,15 @@
 <launch>
+  <arg name="stereo" default="wide"/>
+  <arg name="camera" default="left"/>
+
+
   <include file="$(find hueblob)/launch/config.launch" />
-  <group ns="wide">
+  <group ns="$(arg stereo)">
     <node pkg="nodelet" type="nodelet" name="hueblob_manager"  args="manager"/>
     <node pkg="nodelet" type="nodelet" name="tracker_2d"
           args="load hueblob/tracker_2d hueblob_manager">
       <param name="name" value="rose" />
+      <param name="image" value="$(arg camera)/image_rect_color" />
     </node>
 
     <node pkg="nodelet" type="nodelet" name="projector"
@@ -14,6 +19,7 @@
 
     <node pkg="nodelet" type="nodelet" name="monitor"
           args="load hueblob/monitor hueblob_manager">
+      <param name="image" value="$(arg camera)/image_rect_color" />
     </node>
 
   </group>
