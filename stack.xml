@@ -1,5 +1,5 @@
 <stack>
-  <description brief="Hue Blob">
+  <description brief="Hue blob stereo tracking">
     Stereo tracking of a color blob.
   </description>
   <author>Maintained by Duong Dang and Thomas
@@ -9,11 +9,13 @@
   <url>http://ros.org/wiki/hueblob</url>
   <depend stack="bullet" /> <!-- bullet -->
   <depend stack="common" /> <!-- yaml_cpp -->
-  <depend stack="common_msgs" /> <!-- geometry_msgs, sensor_msgs, stereo_msgs -->
+  <depend stack="common_msgs" /> <!-- geometry_msgs, sensor_msgs, stereo_msgs, visualization_msgs -->
   <depend stack="eigen" /> <!-- eigen -->
   <depend stack="image_common" /> <!-- image_transport -->
+  <depend stack="nodelet_core" /> <!-- nodelet -->
   <depend stack="perception_pcl" /> <!-- pcl, pcl_ros -->
-  <depend stack="ros" />
+  <depend stack="robot_model" /> <!-- resource_retriever -->
+  <depend stack="ros" /> <!-- roslib -->
   <depend stack="ros_comm" /> <!-- std_msgs, roscpp -->
   <depend stack="vision_opencv" /> <!-- cv_bridge -->
 
