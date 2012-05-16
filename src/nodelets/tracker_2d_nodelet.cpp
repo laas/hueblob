@@ -16,7 +16,7 @@
 #include <image_transport/subscriber_filter.h>
 
 #include <nodelet/nodelet.h>
-
+#include <resource_retriever/retriever.h>
 
 using namespace std;
 namespace enc = sensor_msgs::image_encodings;
@@ -55,9 +55,22 @@ namespace hueblob {
                    std::string("left/image_rect_color"));
     local_nh.param("name", name_,  std::string("rose"));
     local_nh.param("model", model_path_,
-                   std::string("/home/nddang/src/ros/hueblob/data/models/ball-rose-5.png"));
+                   std::string("package://hueblob/data/models/ball-rose-3.png"));
 
-    model_ptr_->image = cv::imread(model_path_.c_str());
+    // Retrieve model image using resource retriever.
+    resource_retriever::Retriever resourceRetriever;
+    resource_retriever::MemoryResource resource =
+      resourceRetriever.get(model_path_);
+    std::vector<char> data;
+    data.resize(resource.size);
+    for (unsigned i = 0; i < resource.size; ++i)
+      data[i] = resource.data[i];
+    model_ptr_->image = cv::imdecode(cv::Mat (data), 1);
+    if (!model_ptr_->image.data)
+      throw std::runtime_error
+	("failed to load the model image\n"
+	 "please, double check the ~model parameter");
+
     ROS_INFO_STREAM("Loading " << model_path_ << " to object " << name_);
     object_.addView(model_ptr_->image);
     std::cout << image_ << name_;

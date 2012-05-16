@@ -31,5 +31,7 @@
   <depend package="bullet"/>
   <depend package="visualization_msgs"/>
   <depend package="roslib"/>
+  <depend package="resource_retriever"/>
+
   <rosdep name="opencv2.3"/>
 </package>

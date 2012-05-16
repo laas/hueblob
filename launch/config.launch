@@ -1,3 +1,4 @@
 <launch>
-<param name='/wide/tracker_2d/model' value='$(find hueblob)/data/models/rose_0002.png'/>
+<param name='/wide/tracker_2d/model'
+       value='file://$(find hueblob)/data/models/rose_0003.png'/>
 </launch>
