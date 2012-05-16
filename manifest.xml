@@ -14,6 +14,7 @@
   <export>
     <cpp cflags="-I${prefix}/include" lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lnodelet" />
     <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+    <rosdoc config="rosdoc.yaml" />
   </export>
   <depend package="nodelet"/>
   <depend package="std_msgs"/>
