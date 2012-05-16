@@ -1,9 +1,9 @@
 <package>
-  <description brief="Hue Blob">
+  <description brief="Hue blob stereo tracking">
 
-     Stereo tracking of a color blob.
+    Stereo tracking of a color blob.
 
-     Based on the hueblob LAAS robotics component by Anthony Mallet.
+    Based on the hueblob LAAS robotics component by Anthony Mallet.
 
   </description>
   <author>Duong Dang, Thomas Moulard/thomas.moulard@gmail.com</author>
