@@ -60,9 +60,9 @@ class MonitorNodelet : public nodelet::Nodelet
   cv::Point clicked_p_;
   cv::Point pressed_p_;
   ros::Publisher hint_pub_;
-  image_transport::Publisher new_model_pub_;
+  image_transport::Publisher new_model_pub_, monitor_image_pub_;
   bool selecting_;
-  bool draw_blob_;
+  bool draw_rrect_, draw_bbox_, draw_ellipse_, draw_message_;
   bool track_;
   std::string topic_;
   std::string rrect_topic_;
@@ -84,7 +84,11 @@ class MonitorNodelet : public nodelet::Nodelet
   static void trackButtonCb(GtkWidget *widget, gpointer   data );
   static void sendButtonCb(GtkWidget *widget, gpointer   data );
   static void saveButtonCb(GtkWidget *widget, gpointer   data );
-  static void drawBlobButtonCb(GtkWidget *widget, gpointer   data );
+  static void drawRrectButtonCb(GtkWidget *widget, gpointer   data );
+  static void drawBboxButtonCb(GtkWidget *widget, gpointer   data );
+  static void drawEllipseButtonCb(GtkWidget *widget, gpointer   data );
+  static void drawMessageButtonCb(GtkWidget *widget, gpointer   data );
+
   static gboolean modelAreaCb(GtkWidget *widget, GdkEventExpose *event, gpointer   data );
   static gboolean newModelAreaCb(GtkWidget *widget, GdkEventExpose *event, gpointer   data );
   static void mouseCb(int event, int x, int y, int flags, void* param);
@@ -104,7 +108,10 @@ MonitorNodelet::MonitorNodelet()
     clicked_p_(),
     pressed_p_(),
     selecting_(false),
-    draw_blob_(true),
+    draw_rrect_(true),
+    draw_bbox_(true),
+    draw_ellipse_(true),
+    draw_message_(true),
     track_(true),
     im_ptr_(),
     model_ptr_(),
@@ -182,11 +189,29 @@ void MonitorNodelet::onInit()
   g_signal_connect (track_button, "toggled",
                     G_CALLBACK (&MonitorNodelet::trackButtonCb), this);
 
-  GtkWidget *draw_blob_button = gtk_check_button_new_with_label("Draw blob");
-  gtk_box_pack_start(GTK_BOX(hbox_top), draw_blob_button, false, false, 0);
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(draw_blob_button), true);
-  g_signal_connect (draw_blob_button, "toggled",
-                    G_CALLBACK (&MonitorNodelet::drawBlobButtonCb), this);
+  GtkWidget *draw_rrect_button = gtk_check_button_new_with_label("Draw rrect");
+  gtk_box_pack_start(GTK_BOX(hbox_top), draw_rrect_button, false, false, 0);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(draw_rrect_button), true);
+  g_signal_connect (draw_rrect_button, "toggled",
+                    G_CALLBACK (&MonitorNodelet::drawRrectButtonCb), this);
+
+  GtkWidget *draw_bbox_button = gtk_check_button_new_with_label("Draw bbox");
+  gtk_box_pack_start(GTK_BOX(hbox_top), draw_bbox_button, false, false, 0);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(draw_bbox_button), true);
+  g_signal_connect (draw_bbox_button, "toggled",
+                    G_CALLBACK (&MonitorNodelet::drawBboxButtonCb), this);
+
+  GtkWidget *draw_ellipse_button = gtk_check_button_new_with_label("Draw ellipse");
+  gtk_box_pack_start(GTK_BOX(hbox_top), draw_ellipse_button, false, false, 0);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(draw_ellipse_button), true);
+  g_signal_connect (draw_ellipse_button, "toggled",
+                    G_CALLBACK (&MonitorNodelet::drawEllipseButtonCb), this);
+
+  GtkWidget *draw_message_button = gtk_check_button_new_with_label("Draw message");
+  gtk_box_pack_start(GTK_BOX(hbox_top), draw_message_button, false, false, 0);
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(draw_message_button), true);
+  g_signal_connect (draw_message_button, "toggled",
+                    G_CALLBACK (&MonitorNodelet::drawMessageButtonCb), this);
 
   model_draw_area_ = gtk_drawing_area_new ();
   gtk_widget_set_size_request (model_draw_area_, 200, 200);
@@ -363,16 +388,49 @@ gboolean MonitorNodelet::newModelAreaCb(GtkWidget *widget,GdkEventExpose *event,
 
 
 
-void MonitorNodelet::drawBlobButtonCb(GtkWidget *widget, gpointer   data)
+void MonitorNodelet::drawRrectButtonCb(GtkWidget *widget, gpointer   data)
 {
 
   MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(data);
   //this_->monitor_mutex_.lock();
 
-  this_->draw_blob_ =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
+  this_->draw_rrect_ =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
   //this_->monitor_mutex_.unlock();
 
 }
+void MonitorNodelet::drawBboxButtonCb(GtkWidget *widget, gpointer   data)
+{
+
+  MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(data);
+  //this_->monitor_mutex_.lock();
+
+  this_->draw_bbox_ =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
+  //this_->monitor_mutex_.unlock();
+
+}
+void MonitorNodelet::drawEllipseButtonCb(GtkWidget *widget, gpointer   data)
+{
+
+  MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(data);
+  //this_->monitor_mutex_.lock();
+
+  this_->draw_ellipse_ =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
+  //this_->monitor_mutex_.unlock();
+}
+
+void MonitorNodelet::drawMessageButtonCb(GtkWidget *widget, gpointer   data)
+{
+
+  MonitorNodelet *this_ = reinterpret_cast<MonitorNodelet*>(data);
+  //this_->monitor_mutex_.lock();
+
+  this_->draw_message_ =  gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(widget));
+  //this_->monitor_mutex_.unlock();
+
+}
+
+
+
   namespace{
     bool fexists(const char *filename)
     {
@@ -490,9 +548,21 @@ void MonitorNodelet::trackButtonCb(GtkWidget *widget,gpointer   data)
 
   cv::Rect rect = rrect.boundingRect();
 
-  if (draw_blob_)
+  if (draw_rrect_)
     {
-      Tracker2DNodelet::draw_blob(last_image_, rrect, rect, blob_name_);
+      Tracker2DNodelet::draw_rrect(last_image_, rrect, rect, blob_name_);
+    }
+  if (draw_bbox_)
+    {
+      Tracker2DNodelet::draw_bbox(last_image_, rrect, rect, blob_name_);
+    }
+  if (draw_ellipse_)
+    {
+      Tracker2DNodelet::draw_ellipse(last_image_, rrect, rect, blob_name_);
+    }
+  if (draw_message_)
+    {
+      Tracker2DNodelet::draw_message(last_image_, rrect, rect, blob_name_);
     }
 
   monitor_mutex_.unlock();

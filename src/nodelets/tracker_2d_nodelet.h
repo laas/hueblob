@@ -26,7 +26,16 @@ namespace hueblob {
     public:
       Tracker2DNodelet();
       virtual ~Tracker2DNodelet(){};
-      static void draw_blob(cv::Mat im, const cv::RotatedRect &  rrect,
+      static void draw_rrect(cv::Mat im, const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                      const std::string & name);
+      static void draw_bbox(cv::Mat im, const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                      const std::string & name);
+      static void draw_ellipse(cv::Mat im, const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                      const std::string & name);
+      static void draw_message(cv::Mat im, const cv::RotatedRect &  rrect,
                                    const cv::Rect & rect,
                                       const std::string & name);
     private:

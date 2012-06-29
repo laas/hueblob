@@ -158,7 +158,37 @@ namespace hueblob {
     return res;
   }
 
-  void Tracker2DNodelet::draw_blob(cv::Mat im,
+
+
+  void Tracker2DNodelet::draw_rrect(cv::Mat im,
+                                   const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                   const std::string & name)
+  {
+    static const cv::Scalar color =  CV_RGB(255,0,0);
+    rotated_rect(im, rrect, color);
+  }
+
+  void Tracker2DNodelet::draw_bbox(cv::Mat im,
+                                   const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                   const std::string & name)
+  {
+    static const cv::Scalar color3 = CV_RGB(0,255,0);
+    cv::Point p1(rect.x, rect.y);
+    cv::Point p2(rect.x + rect.width, rect.y + rect.height);
+    cv::rectangle(im, p1, p2, color3);
+  }
+  void Tracker2DNodelet::draw_ellipse(cv::Mat im,
+                                   const cv::RotatedRect &  rrect,
+                                   const cv::Rect & rect,
+                                   const std::string & name)
+  {
+    static const cv::Scalar color2 = CV_RGB(0,0,255);
+
+    cv::ellipse(im, rrect, color2);
+  }
+  void Tracker2DNodelet::draw_message(cv::Mat im,
                                    const cv::RotatedRect &  rrect,
                                    const cv::Rect & rect,
                                    const std::string & name)
@@ -170,18 +200,6 @@ namespace hueblob {
     cv::Point p2(rect.x + rect.width, rect.y + rect.height);
     cv::Point pc(rect.x, rect.y + std::max(16, rect.height+8));
 
-    ROS_DEBUG_STREAM("Drawing rect " << rect.x << " "
-                     << " " << rect.y
-                     << " " << rect.width <<
-                     " " << rect.height);
-    cv::putText(im, name, p1,
-                CV_FONT_HERSHEY_SIMPLEX,
-                0.5, color);
-    if (rotated_rect(im, rrect, color))
-      {
-        cv::ellipse(im, rrect, color2);
-        cv::rectangle(im, p1, p2, color3);
-      }
 
     if (!( 0 < rect.x && 0 <= rect.width
            && rect.x + rect.width < im.cols && 0 <= rect.y
@@ -207,6 +225,7 @@ namespace hueblob {
                     0.5, color);
       }
   }
+
 
   void Tracker2DNodelet::newModelCallback(const sensor_msgs::ImageConstPtr&
                                        msg)
@@ -272,7 +291,7 @@ namespace hueblob {
 
     if ( rrect && tracked_image_pub_.getNumSubscribers() != 0)
       {
-        draw_blob(cv_ptr_->image, *rrect, rect, name_);
+        draw_rrect(cv_ptr_->image, *rrect, rect, name_);
       }
 
 
