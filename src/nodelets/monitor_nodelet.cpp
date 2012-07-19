@@ -73,7 +73,7 @@ class MonitorNodelet : public nodelet::Nodelet
   image_transport::SubscriberFilter image_sub_, model_sub_;
   message_filters::Subscriber<RotatedRectStamped> rrect_sub_;
   sensor_msgs::ImageConstPtr last_msg_, model_msg_, last_model_msg_;
-  cv_bridge::CvImagePtr im_ptr_, model_ptr_, new_model_ptr_;
+  cv_bridge::CvImagePtr im_ptr_, model_ptr_, new_model_ptr_, monitor_ptr_;
 
   Synchronizer<Policy> sync_;
 
@@ -116,6 +116,7 @@ MonitorNodelet::MonitorNodelet()
     im_ptr_(),
     model_ptr_(),
     new_model_ptr_(new cv_bridge::CvImage),
+    monitor_ptr_(new cv_bridge::CvImage),
     sync_(10)
 {
 }
@@ -129,6 +130,7 @@ void MonitorNodelet::onInit()
 {
   NODELET_DEBUG("Initializing nodelet");
   new_model_ptr_->encoding = "bgr8";
+  monitor_ptr_->encoding = "bgr8";
   nh_ = getNodeHandle();
   ros::NodeHandle local_nh = getPrivateNodeHandle();
   // Command line argument parsing
@@ -168,6 +170,9 @@ void MonitorNodelet::onInit()
   hint_pub_ = local_nh.advertise<sensor_msgs::RegionOfInterest>(hint_topic, 1);
   new_model_topic_ = ros::names::resolve("blobs/" + blob_name_ + "/new_model_image");
   new_model_pub_ = it_.advertise(new_model_topic_, 1);
+
+  std::string monitor_image = ros::names::resolve("blobs/" + blob_name_ + "/monitor_image");
+  monitor_image_pub_ = it_.advertise(monitor_image, 1);
 
   cv::namedWindow(window_name_, autosize ? CV_WINDOW_AUTOSIZE : 0);
   cv::setMouseCallback(window_name_, &MonitorNodelet::mouseCb, this);
@@ -564,6 +569,9 @@ void MonitorNodelet::trackButtonCb(GtkWidget *widget,gpointer   data)
     {
       Tracker2DNodelet::draw_message(last_image_, rrect, rect, blob_name_);
     }
+
+  monitor_ptr_->image = last_image_;
+  monitor_image_pub_.publish(monitor_ptr_->toImageMsg());
 
   monitor_mutex_.unlock();
   if (!last_image_.empty())
